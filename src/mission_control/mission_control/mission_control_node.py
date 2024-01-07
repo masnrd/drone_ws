@@ -1,4 +1,5 @@
 import rclpy
+import struct
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from enum import IntEnum
@@ -30,6 +31,40 @@ class ReportedDroneMode(IntEnum):
     TRAVEL     = 4   # Moving to Sector
     SEARCH     = 5   # Searching Sector
 
+class DroneCommandId(IntEnum):
+    RTB           = 0  # Force RTB. No further commands will be accepted.
+    SEARCH_SECTOR = 1
+    MOVE_TO       = 2  # Go to a specific lat/lon.
+
+class DroneCommand:
+    """ Interface for a command """
+    def __init__(self, command_id: int, command_data: bytes):
+        self.command_id = command_id
+        self.command_data = command_data
+
+    def generate_command(self, drone_id: int) -> Command.Request:
+        cmd = Command.Request()
+        cmd.drone_id = drone_id
+        cmd.cmd_id = self.command_id
+        cmd.cmd_data = self.command_data
+        return cmd
+
+class DroneCommand_RTB(DroneCommand):
+    def __init__(self, base_pos: LatLon):
+        command_data = struct.pack("!ff", base_pos.lat, base_pos.lon)
+        super().__init__(DroneCommandId.RTB, command_data)
+
+class DroneCommand_SEARCH_SECTOR(DroneCommand):
+    def __init__(self, sector_start: LatLon, sector_prob_map):
+        #TODO: encode prob_map
+        command_data = struct.pack("!ff", sector_start.lat, sector_start.lon)
+        super().__init__(DroneCommandId.SEARCH_SECTOR, command_data)
+
+class DroneCommand_MOVE_TO(DroneCommand):
+    def __init__(self, tgt_pos: LatLon):
+        command_data = struct.pack("!ff", tgt_pos.lat, tgt_pos.lon)
+        super().__init__(DroneCommandId.MOVE_TO, command_data)
+
 class DroneState:
     def __init__(self, drone_id: int, node: 'MCNode'):
         self.drone_id = drone_id
@@ -40,6 +75,7 @@ class DroneState:
         self.estimated_rtt = INITIAL_RTT_ESTIMATE
         self.position = None
         self.last_command = None
+        self.pending_command_fut = None
         self.timeout = None
 
         self.sub_ready = node.create_subscription(
@@ -92,10 +128,11 @@ class MCNode(Node):
     def add_drone(self, drone_id: int):
         self.drones[drone_id] = DroneState(drone_id, self)
 
-    def mc_send_command(self, command_id: int, drone_id: int):
-        command = Command.Request()
+    def mc_send_command(self, drone_cmd: DroneCommand, drone_id: int):
         drone = self.drones[drone_id]
-        #TODO: Send request and handle response
+        command = drone_cmd.generate_command(drone_id)
+        drone.last_command = command
+        drone.pending_command_fut = drone.cli_cmd.call_async(command)
 
     def mc_recv_ready(self, msg: Ready):
         """ MC receives a READY message """
@@ -106,24 +143,37 @@ class MCNode(Node):
         self.drones[drone_id].mode = DroneMode.READY
         print(f"MISSION CONTROL: Drone {drone_id} reports READY")
 
+        #TODO: temporary hardcoded command sent
+        self.hardcoded_send_command(drone_id)
+
     def mc_recv_status(self, msg: Status.Request, msg_ack: Status.Response):
         """ MC receives a STATUS update from a drone """
         # 1. Identify drone by ID
         drone_id = msg.drone_id
+        drone = self.drones[drone_id]
 
         # 2. Update local record of drone position and drone state
-        self.drones[drone_id].position = LatLon(msg.lat, msg.lon)
-        self.drones[drone_id].reported_mode = ReportedDroneMode(msg.drone_mode)
-        self.drones[drone_id].reported_battery_percentage = msg.battery_percentage
-        self.drones[drone_id].update_rtt(msg.last_rtt)
-        print(f"MISSION CONTROL: {self.drones[drone_id]}")
+        drone.position = LatLon(msg.lat, msg.lon)
+        drone.reported_mode = ReportedDroneMode(msg.drone_mode)
+        drone.reported_battery_percentage = msg.battery_percentage
+        drone.update_rtt(msg.last_rtt)
+        print(f"MISSION CONTROL: {drone}")
 
         # 3. Send response
         msg_ack.status_timestamp = msg.timestamp
         msg_ack.drone_id = drone_id
-        msg_ack.last_cmd_id = -1
+
+        if drone.last_command is not None:
+            msg_ack.last_cmd_id = drone.last_command.cmd_id
+        else:
+            msg_ack.last_cmd_id = -1
 
         return msg_ack
+
+    def hardcoded_send_command(self, drone_id: int):
+        tgt = LatLon(1.340643554050367, 103.9626564184675)
+        drone_cmd = DroneCommand_SEARCH_SECTOR(tgt, None)
+        self.mc_send_command(drone_cmd, drone_id)
 
 def main(args=None):
     rclpy.init(args=args)

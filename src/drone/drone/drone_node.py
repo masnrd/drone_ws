@@ -1,8 +1,9 @@
 import rclpy
+import struct
 from math import isnan
 from enum import IntEnum
 from threading import Event
-from typing import Tuple, Any
+from typing import Dict, List
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.task import Future
@@ -23,6 +24,34 @@ DEFAULT_TGT_ALTITUDE = 5
 
 DEFAULT_DRONE_ID = 69  #TODO: fix for multiple drones
 
+class DroneCommandId(IntEnum):
+    RTB           = 0  # Force RTB. No further commands will be accepted.
+    SEARCH_SECTOR = 1
+    MOVE_TO       = 2  # Go to a specific lat/lon.
+
+class DroneCommand:
+    """ Interface for a command """
+    def __init__(self, command_id: int, command_data: List[bytes]):
+        self.command_id = command_id
+        self.command_data = b''.join(command_data)
+
+    def unpack_command(self) -> Dict:
+        ret = {
+            "command_id": self.command_id
+        }
+        if self.command_id == DroneCommandId.RTB:
+            unpacked = struct.unpack("!ff", self.command_data)
+            ret["base_pos"] = LatLon(unpacked[0], unpacked[1])
+        elif self.command_id == DroneCommandId.SEARCH_SECTOR:
+            unpacked = struct.unpack("!ff", self.command_data)
+            ret["sector_start_pos"] = LatLon(unpacked[0], unpacked[1])
+            ret["sector_prob_map"] = None #TODO: decode np array
+        elif self.command_id == DroneCommandId.MOVE_TO:
+            unpacked = struct.unpack("!ff", self.command_data)
+            ret["goto_pos"] = LatLon(unpacked[0], unpacked[1])
+
+        return ret
+
 class DroneMode(IntEnum):
     RTB        = -2  # Drone is returning to MC
     IDLE       = -1  # Drone is idle
@@ -42,7 +71,8 @@ class DroneNode(Node):
     - `ref_latlon`: Reference Lat/Lon for NED Local World Frame
     - `cur_latlon`: Current Lat/Lon of drone
     - `tgt_latlon`: Target Lat/Lon of drone, published as PositionXY and only in the TRAVEL, SEARCH and RTB states.
-    - `last_mc_rtt`: Most recent round-trip-time with Mission Control
+    - `mc_last_rtt`: Most recent round-trip-time with Mission Control
+    - `mc_last_cmd_id`: Most recent command ID from Mission Control
     - Subscriptions:
         - `sub_vehglobpos`
         - `sub_vehcmdack`
@@ -95,6 +125,7 @@ class DroneNode(Node):
         self.srv_mc_cmd = None
         self.mc_heartbeat_timer = None
         self.mc_last_rtt = 0.0
+        self.mc_last_cmd_id = -1
         self._mc_last_future = None
         self._mc_heartbeat_dropped_count = 0
 
@@ -223,20 +254,8 @@ class DroneNode(Node):
                 #TODO: switch to failure mode and RTB
                 pass
 
-        #TODO: Send connection ping
-        self.publish_ready()
-            
-        #TODO: if received a command -- this should be shifted to the callback once it's coded
-        # self.destroy_timer(self._idle_timer)
-        # ## Hardcoded, simulated data for now -- this should come from the MC in the real scenario
-        # print("DRONE: Received UPDATE message from MC, switching to TRAVEL state.")
-        # sim_update_start_latlon = LatLon(1.340643554050367, 103.9626564184675)
-        # sim_update_prob_map = None
-        # self.pathfinder = PathfinderState(sim_update_start_latlon, sim_update_prob_map)  # Initialise pathfinding
-        # self.tgt_latlon = sim_update_start_latlon
-        # print(f"DRONE: Headed to {self.tgt_latlon.toXY(self.ref_latlon)} ({self.tgt_latlon})")
-
-        # self.drone_state = DroneMode.TRAVEL
+            # Inform MC of ready state
+            self.publish_ready()
 
     def heartbeat_timer_callback(self):
         """ Called to maintain the heartbeat of OffboardControlMessages to the flight controller. """
@@ -328,7 +347,33 @@ class DroneNode(Node):
         self.mc_last_rtt = cur_ts - prev_ts # RTT in seconds
         self._mc_last_future = None
         self._mc_heartbeat_dropped_count = 0
+
+        if self.mc_last_cmd_id != status_ack.last_cmd_id and self.mc_last_cmd_id != -1:
+            # We missed a command somewhere
+            #TODO: do something
+            print(f"DRONE WARNING: Drone processed last command {self.mc_last_cmd_id}, MC Status_ACK last command {status_ack.last_cmd_id}")
+            pass
         
+    def mc_recv_command(self, request: Command.Request, response: Command.Response):
+        """ Receives a command from MC """
+        cmd = DroneCommand(request.cmd_id, request.cmd_data)
+        response.drone_id = request.drone_id
+        response.cmd_id = request.cmd_id
+        self.mc_last_cmd_id = request.cmd_id
+
+        instruction = cmd.unpack_command()
+        print(f"DRONE: Received {DroneCommandId(instruction['command_id']).name} instruction from MC. Switching to TRAVEL state.")
+        if instruction["command_id"] != DroneCommandId.SEARCH_SECTOR:
+            print(f"DRONE WARNING: Received unimplemented command {DroneCommandId(instruction['command_id']).name}")
+        elif instruction["command_id"] == DroneCommandId.SEARCH_SECTOR:
+            start_latlon = instruction["sector_start_pos"]
+            prob_map = instruction["sector_prob_map"]
+            self.pathfinder = PathfinderState(start_latlon, prob_map)
+            self.tgt_latlon = start_latlon
+            self.destroy_timer(self._idle_timer)
+            self.drone_state = DroneMode.TRAVEL
+
+        return response
 
     def fc_recv_vehglobpos(self, msg: VehicleGlobalPosition):
         # Received VehicleGlobalPosition from FC
@@ -358,10 +403,6 @@ class DroneNode(Node):
                 print("DRONE: Armed in OFFBOARD_CONTROL_MODE.")
                 self.drone_state = DroneMode.CONNECT_MC
                 self.drone_connect_mc()
-
-    def mc_recv_command(self, request, response):
-        """ Receives a command from MC """
-        pass
 
     def publish_vehcmdmsg(self, command: int, p1: float = 0.0, p2: float = 0.0, p3: float = 0.0):
         msg = VehicleCommand()
