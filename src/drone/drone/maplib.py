@@ -42,6 +42,9 @@ class LatLon:
         new_x = d*cos(bearing)
         new_y = d*sin(bearing)
         return PositionXY(new_x, new_y, refPt)
+    
+    def __repr__(self) -> str:
+        return f"({self.lat, self.lon})"
 
 @dataclass
 class PositionXY:
