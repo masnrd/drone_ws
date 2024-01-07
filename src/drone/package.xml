@@ -9,6 +9,8 @@
 
   <depend>rclpy</depend>
   <depend>h3</depend>
+  <depend>px4_msgs</depend>
+  <depend>mc_interface_msgs</depend>
   
   <test_depend>python3-pytest</test_depend>
 
