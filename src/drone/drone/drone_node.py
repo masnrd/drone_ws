@@ -1,4 +1,5 @@
 import rclpy
+from math import isnan
 from enum import IntEnum
 from threading import Event
 from typing import Tuple, Any
@@ -8,7 +9,7 @@ from .maplib import LatLon, PositionXY
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint
 
 CONNFC_CHECK_INTERVAL = 0.5  # Interval to check for the refpoint
-CONNFC_TIMEOUT = 5  # Number of seconds until we timeout the refpoint check
+CONNFC_TIMEOUT = 15  # Number of seconds until we timeout the refpoint check
 TIMER_INTERVAL = 0.1  # 100 ms
 
 class DroneMode(IntEnum):
@@ -74,6 +75,7 @@ class DroneNode(Node):
             self.qos_profile,
         )
         self.drone_state = DroneMode.CONNECT_FC
+        print("DRONE: Connecting to FC...")
         self._connfc_timer = self.create_timer(CONNFC_CHECK_INTERVAL, self.drone_connect_fc)
 
     def drone_connect_fc(self):
@@ -88,13 +90,16 @@ class DroneNode(Node):
             self._connfc_check_count += 1
             return
 
+        # Here, we've established the reference point and can proceed to the INIT_FC stage.
         self.destroy_timer(self._connfc_timer)
         self.destroy_subscription(self._connfc_sub_vehlocpos)
-        print(f"DRONE: Reference LatLon: {self.ref_latlon}")
+        print(f"DRONE: Connected to FC. Reference LatLon: {self.ref_latlon}")
         self.drone_state = DroneMode.INIT_FC
         self.drone_init_fc()
 
     def _fc_recv_locpos(self, msg: VehicleLocalPosition):
+        if isnan(msg.ref_lat) or isnan(msg.ref_lon):
+            return
         self.ref_latlon = LatLon(msg.ref_lat, msg.ref_lon)
 
     def drone_init_fc(self):
