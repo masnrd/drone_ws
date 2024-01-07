@@ -8,13 +8,18 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from .maplib import LatLon, PositionXY
 from .pathfinder import PathfinderState
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint
+from mc_interface_msgs.msg import Ready, Status
+from mc_interface_msgs.srv import Command
 
 CONNFC_CHECK_INTERVAL = 0.5  # Interval to check for the refpoint
 CONNFC_TIMEOUT = 15  # Number of seconds until we timeout the refpoint check
 IDLE_PING_INTERVAL = 1 #SWITCH TO 30 ONCE SET  # Number of seconds until we ping MC for an update while in IDLE mode
 MAX_IDLE_PINGS = 10  # Ping a max of 10 times before we consider it a failure to connect
 TIMER_INTERVAL = 0.1  # 100 ms
+MC_HEARTBEAT_INTERVAL = 1 # 1 s
 DEFAULT_TGT_ALTITUDE = 5
+
+DEFAULT_DRONE_ID = 69  #TODO: fix for multiple drones
 
 class DroneMode(IntEnum):
     RTB        = -2  # Drone is returning to MC
@@ -42,6 +47,10 @@ class DroneNode(Node):
         - `pub_trajsp`
         - `pub_vehcom`
         - `pub_ocm`
+        - `pub_mc_ready` (MC)
+        - `pub_mc_status` (MC)
+    - Service Servers:
+        - `srv_mc_cmd` (MC)
     """
 
     def __init__(self):
@@ -53,6 +62,7 @@ class DroneNode(Node):
             depth=1
         )
         self.drone_state = DroneMode.INIT
+        self.drone_id = DEFAULT_DRONE_ID
 
         self.drone_init()
 
@@ -66,12 +76,22 @@ class DroneNode(Node):
         self.cur_latlon = None
         self.tgt_latlon = None
         self.tgt_altitude = DEFAULT_TGT_ALTITUDE
+
+        # Connection to FC
         self.sub_vehglobpos = None
         self.sub_vehcmdack = None
         self.pub_trajsp = None
         self.pub_vehcom = None
         self.pub_ocm = None
         self.heartbeat_timer = None
+
+        # Connection to MC
+        self.pub_mc_ready = None
+        self.pub_mc_status = None
+        self.srv_mc_cmd = None
+        self.mc_heartbeat_timer = None
+
+        # Miscellaneous
         self.pathfinder = None
         self._counter = None
 
@@ -155,6 +175,25 @@ class DroneNode(Node):
         print("DRONE: Drone armed in Offboard Control Mode. Connecting to Mission Control...")
         if self.drone_state != DroneMode.CONNECT_MC:
             raise DroneError(f"Expected CONNECT_MC state, current state is {self.drone_state}")
+        
+        # Initialise Mission Control communication
+        self.pub_mc_ready = self.create_publisher(
+            Ready,
+            f"/drone_{self.drone_id}/out/ready",
+            self.qos_profile,
+        )
+        self.pub_mc_status = self.create_publisher(
+            Status,
+            f"/drone_{self.drone_id}/out/status",
+            self.qos_profile
+        )
+        self.srv_mc_cmd = self.create_service(
+            Command,
+            f"/drone_{self.drone_id}/srv/cmd",
+            self.mc_recv_command,
+        )
+
+        self.mc_heartbeat_timer = self.create_timer(MC_HEARTBEAT_INTERVAL, self.mc_heartbeat_timer_callback)
 
         # Switch to IDLE state
         self.drone_state = DroneMode.IDLE
@@ -166,6 +205,7 @@ class DroneNode(Node):
             raise DroneError(f"Expected IDLE state, current state is {self.drone_state}")
         
         #TODO: Send connection message
+        self.publish_ready()
         
         # Set timer to wait
         print("DRONE: Connected to MC. Waiting for instructions...")
@@ -181,18 +221,19 @@ class DroneNode(Node):
                 pass
 
         #TODO: Send connection ping
+        self.publish_ready()
             
-        #TODO: if received -- this should be shifted to the callback once it's coded
-        self.destroy_timer(self._idle_timer)
-        ## Hardcoded, simulated data for now -- this should come from the MC in the real scenario
-        print("DRONE: Received UPDATE message from MC, switching to TRAVEL state.")
-        sim_update_start_latlon = LatLon(1.340643554050367, 103.9626564184675)
-        sim_update_prob_map = None
-        self.pathfinder = PathfinderState(sim_update_start_latlon, sim_update_prob_map)  # Initialise pathfinding
-        self.tgt_latlon = sim_update_start_latlon
-        print(f"DRONE: Headed to {self.tgt_latlon.toXY(self.ref_latlon)} ({self.tgt_latlon})")
+        #TODO: if received a command -- this should be shifted to the callback once it's coded
+        # self.destroy_timer(self._idle_timer)
+        # ## Hardcoded, simulated data for now -- this should come from the MC in the real scenario
+        # print("DRONE: Received UPDATE message from MC, switching to TRAVEL state.")
+        # sim_update_start_latlon = LatLon(1.340643554050367, 103.9626564184675)
+        # sim_update_prob_map = None
+        # self.pathfinder = PathfinderState(sim_update_start_latlon, sim_update_prob_map)  # Initialise pathfinding
+        # self.tgt_latlon = sim_update_start_latlon
+        # print(f"DRONE: Headed to {self.tgt_latlon.toXY(self.ref_latlon)} ({self.tgt_latlon})")
 
-        self.drone_state = DroneMode.TRAVEL
+        # self.drone_state = DroneMode.TRAVEL
 
     def heartbeat_timer_callback(self):
         """ Called to maintain the heartbeat of OffboardControlMessages to the flight controller. """
@@ -226,6 +267,19 @@ class DroneNode(Node):
             tsp_msg.timestamp = self.get_clock().now().nanoseconds // 1000
             self.pub_trajsp.publish(tsp_msg)
 
+    def mc_heartbeat_timer_callback(self):
+        """ Called to maintain status updates to Mission Control """
+        status = Status()
+        status.drone_id = self.drone_id
+        status.drone_mode = self.drone_state
+        if self.cur_latlon is None:
+            status.lat = float('nan')
+            status.lon = float('nan')
+        else:
+            status.lat = self.cur_latlon.lat
+            status.lon = self.cur_latlon.lon
+        self.pub_mc_status.publish(status)
+
     def fc_recv_vehglobpos(self, msg: VehicleGlobalPosition):
         # Received VehicleGlobalPosition from FC
         if isnan(msg.lat) or isnan(msg.lon):
@@ -254,6 +308,10 @@ class DroneNode(Node):
                 self.drone_state = DroneMode.CONNECT_MC
                 self.drone_connect_mc()
 
+    def mc_recv_command(self, request, response):
+        """ Receives a command from MC """
+        pass
+
     def publish_vehcmdmsg(self, command: int, p1: float = 0.0, p2: float = 0.0, p3: float = 0.0):
         msg = VehicleCommand()
         msg.timestamp = self.get_clock().now().nanoseconds // 1000
@@ -267,6 +325,12 @@ class DroneNode(Node):
         msg.param2 = p2
         msg.param3 = p3
         self.pub_vehcom.publish(msg)
+
+    def publish_ready(self):
+        msg = Ready()
+        msg.drone_id = self.drone_id
+        self.pub_mc_ready.publish(msg)
+        
 
 def main(args=None):
     rclpy.init(args=args)
