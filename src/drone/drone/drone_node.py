@@ -140,7 +140,14 @@ class DroneNode(Node):
         self._counter = 0
         self.heartbeat_timer = self.create_timer(TIMER_INTERVAL, self.heartbeat_timer_callback)
 
+    def drone_connect_mc(self):
+        """ Establish a connection to Mission Control """
+        print("DRONE: Drone armed in Offboard Control Mode. Connecting to Mission Control...")
+        if self.drone_state != DroneMode.CONNECT_MC:
+            raise DroneError(f"Expected CONNECT_MC state, current state is {self.drone_state}")
+
     def heartbeat_timer_callback(self):
+        """ Called to maintain the heartbeat of OffboardControlMessages to the flight controller. """
         if (self._counter <= (1 / TIMER_INTERVAL)):
             # Must receive stream for at least a second
             ## VehicleCommand: Change mode to Offboard Mode
@@ -148,6 +155,10 @@ class DroneNode(Node):
 
             ## VehicleCommand: Arm
             self.publish_vehcmdmsg(VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, 1.0)
+        else:
+            # Should be already armed, otherwise fail
+            if self.drone_state == DroneMode.INIT_FC:
+                raise DroneError(f"Failed to arm drone after {TIMER_INTERVAL}.")
         
         # Publish heartbeat
         hb_msg = OffboardControlMode()
@@ -164,8 +175,13 @@ class DroneNode(Node):
 
     def fc_recv_vehcmdack(self, msg: VehicleCommandAck):
         # Received VehicleCommandAck from FC
-        print(f"RECEIVED: {msg}")
-        pass
+        if msg.command == VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM:
+            if msg.result != VehicleCommandAck.VEHICLE_CMD_RESULT_ACCEPTED:
+                return
+            if self.drone_state == DroneMode.INIT_FC:
+                # Drone has been armed in offboard control mode, can switch to CONNECT_MC state.
+                self.drone_state = DroneMode.CONNECT_MC
+                self.drone_connect_mc()
 
     def publish_vehcmdmsg(self, command: int, p1: float = 0.0, p2: float = 0.0, p3: float = 0.0):
         msg = VehicleCommand()
