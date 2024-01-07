@@ -1,7 +1,0 @@
-int64 drone_id        # ID of drone
-int32 drone_mode      # Current mode of drone
-float64 lat
-float64 lon
----
-int64 drone_id        # ID of drone to acknowledge
-int32 last_cmd_id     # ID of last command, for drone to ensure no other commands have been sent
