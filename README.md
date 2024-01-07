@@ -3,6 +3,11 @@
 A ROS workspace for the onboard computer. See [IMPLEMENTATION](./docs/IMPLEMENTATION.md) for the planned implementation.
 
 ## Installation
+Install all Python dependencies with:
+```
+python3 -m pip install -r requirements.txt
+```
+
 If the ROS2 distribution hasn't been initialised before, do so:
 ```bash
 source /opt/ros/foxy/setup.bash # or your preferred ROS2 distribution
