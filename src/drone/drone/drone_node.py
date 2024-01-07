@@ -6,11 +6,15 @@ from typing import Tuple, Any
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from .maplib import LatLon, PositionXY
+from .pathfinder import PathfinderState
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint
 
 CONNFC_CHECK_INTERVAL = 0.5  # Interval to check for the refpoint
 CONNFC_TIMEOUT = 15  # Number of seconds until we timeout the refpoint check
+IDLE_PING_INTERVAL = 1 #SWITCH TO 30 ONCE SET  # Number of seconds until we ping MC for an update while in IDLE mode
+MAX_IDLE_PINGS = 10  # Ping a max of 10 times before we consider it a failure to connect
 TIMER_INTERVAL = 0.1  # 100 ms
+DEFAULT_TGT_ALTITUDE = 5
 
 class DroneMode(IntEnum):
     RTB        = -2  # Drone is returning to MC
@@ -30,6 +34,7 @@ class DroneNode(Node):
     """
     - `ref_latlon`: Reference Lat/Lon for NED Local World Frame
     - `cur_latlon`: Current Lat/Lon of drone
+    - `tgt_latlon`: Target Lat/Lon of drone, published as PositionXY and only in the TRAVEL, SEARCH and RTB states.
     - Subscriptions:
         - `sub_vehglobpos`
         - `sub_vehcmdack`
@@ -59,6 +64,8 @@ class DroneNode(Node):
         
         self.ref_latlon = None
         self.cur_latlon = None
+        self.tgt_latlon = None
+        self.tgt_altitude = DEFAULT_TGT_ALTITUDE
         self.sub_vehglobpos = None
         self.sub_vehcmdack = None
         self.pub_trajsp = None
@@ -126,17 +133,17 @@ class DroneNode(Node):
         self.pub_trajsp = self.create_publisher(
             TrajectorySetpoint,
             "/fmu/in/trajectory_setpoint",
-            10,
+            self.qos_profile,
         )
         self.pub_vehcom = self.create_publisher(
             VehicleCommand,
             "/fmu/in/vehicle_command",
-            10,
+            self.qos_profile,
         )
         self.pub_ocm = self.create_publisher(
             OffboardControlMode,
             "/fmu/in/offboard_control_mode",
-            10,
+            self.qos_profile,
         )
 
         # Attempt to arm drone in Offboard mode
@@ -148,6 +155,44 @@ class DroneNode(Node):
         print("DRONE: Drone armed in Offboard Control Mode. Connecting to Mission Control...")
         if self.drone_state != DroneMode.CONNECT_MC:
             raise DroneError(f"Expected CONNECT_MC state, current state is {self.drone_state}")
+
+        # Switch to IDLE state
+        self.drone_state = DroneMode.IDLE
+        self.drone_idle()
+
+    def drone_idle(self):
+        """ Wait for MC instructions. """
+        if self.drone_state != DroneMode.IDLE:
+            raise DroneError(f"Expected IDLE state, current state is {self.drone_state}")
+        
+        #TODO: Send connection message
+        
+        # Set timer to wait
+        print("DRONE: Connected to MC. Waiting for instructions...")
+        self._idle_check_count = 0
+        self._idle_timer = self.create_timer(IDLE_PING_INTERVAL, self.drone_idle_ping)
+    
+    def drone_idle_ping(self):
+        """ Ping MC for an update """
+        if self.drone_state == DroneMode.IDLE:
+            self._idle_check_count += 1
+            if self._idle_check_count >= MAX_IDLE_PINGS:
+                #TODO: switch to failure mode and RTB
+                pass
+
+        #TODO: Send connection ping
+            
+        #TODO: if received -- this should be shifted to the callback once it's coded
+        self.destroy_timer(self._idle_timer)
+        ## Hardcoded, simulated data for now -- this should come from the MC in the real scenario
+        print("DRONE: Received UPDATE message from MC, switching to TRAVEL state.")
+        sim_update_start_latlon = LatLon(1.340643554050367, 103.9626564184675)
+        sim_update_prob_map = None
+        self.pathfinder = PathfinderState(sim_update_start_latlon, sim_update_prob_map)  # Initialise pathfinding
+        self.tgt_latlon = sim_update_start_latlon
+        print(f"DRONE: Headed to {self.tgt_latlon.toXY(self.ref_latlon)} ({self.tgt_latlon})")
+
+        self.drone_state = DroneMode.TRAVEL
 
     def heartbeat_timer_callback(self):
         """ Called to maintain the heartbeat of OffboardControlMessages to the flight controller. """
@@ -162,6 +207,7 @@ class DroneNode(Node):
             # Should be already armed, otherwise fail
             if self.drone_state == DroneMode.INIT_FC:
                 raise DroneError(f"Failed to arm drone after {TIMER_INTERVAL}.")
+        self._counter += 1
         
         # Publish heartbeat
         hb_msg = OffboardControlMode()
@@ -172,12 +218,32 @@ class DroneNode(Node):
         hb_msg.timestamp = self.get_clock().now().nanoseconds // 1000
         self.pub_ocm.publish(hb_msg)
 
+        # Publish tgt position if drone is in TRAVEL, SEARCH or RTB states
+        if self.drone_state in [DroneMode.TRAVEL, DroneMode.SEARCH, DroneMode.RTB]:
+            tgt_xy = self.tgt_latlon.toXY(self.ref_latlon)
+            tsp_msg = TrajectorySetpoint()
+            tsp_msg.position = [tgt_xy.x, tgt_xy.y, -self.tgt_altitude]
+            tsp_msg.timestamp = self.get_clock().now().nanoseconds // 1000
+            self.pub_trajsp.publish(tsp_msg)
+
     def fc_recv_vehglobpos(self, msg: VehicleGlobalPosition):
         # Received VehicleGlobalPosition from FC
         if isnan(msg.lat) or isnan(msg.lon):
             return
         self.cur_latlon = LatLon(msg.lat, msg.lon)
 
+        # Update tgt if drone is in TRAVEL or SEARCH state
+        threshold = 1  # in metres
+        if self.tgt_latlon is not None and self.tgt_latlon.distFromPoint(self.cur_latlon) < threshold:
+            if self.drone_state == DroneMode.TRAVEL:
+                print(f"Reached {self.tgt_latlon}, currently at {self.cur_latlon}")
+                self.drone_state = DroneMode.SEARCH
+                print("DRONE: Reached start position, switching to SEARCH state.")
+                self.tgt_latlon = self.pathfinder.get_next_waypoint(self.tgt_latlon)
+            elif self.drone_state == DroneMode.SEARCH:
+                print(f"Reached {self.tgt_latlon}, currently at {self.cur_latlon}")
+                self.tgt_latlon = self.pathfinder.get_next_waypoint(self.tgt_latlon)
+                
     def fc_recv_vehcmdack(self, msg: VehicleCommandAck):
         # Received VehicleCommandAck from FC
         if msg.command == VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM:
