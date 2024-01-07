@@ -29,6 +29,7 @@ class DroneError(Exception):
 class DroneNode(Node):
     """
     - `ref_latlon`: Reference Lat/Lon for NED Local World Frame
+    - `cur_latlon`: Current Lat/Lon of drone
     - Subscriptions:
         - `sub_vehglobpos`
         - `sub_vehcmdack`
@@ -57,17 +58,25 @@ class DroneNode(Node):
             raise DroneError(f"Expected INIT state, current state is {self.drone_state}")
         
         self.ref_latlon = None
+        self.cur_latlon = None
         self.sub_vehglobpos = None
         self.sub_vehcmdack = None
         self.pub_trajsp = None
         self.pub_vehcom = None
         self.pub_ocm = None
         self.heartbeat_timer = None
+        self.pathfinder = None
         self._counter = None
 
-        # Start subscriber for reference point
+        # Start subscribers for reference point
         self.ref_latlon = None
         self._connfc_check_count = 0
+        self.sub_vehglobpos = self.create_subscription(
+            VehicleGlobalPosition,
+            "/fmu/out/vehicle_global_position",
+            self.fc_recv_vehglobpos,
+            self.qos_profile,
+        )
         self._connfc_sub_vehlocpos = self.create_subscription(
             VehicleLocalPosition,
             "/fmu/out/vehicle_local_position",
@@ -86,14 +95,14 @@ class DroneNode(Node):
         if self._connfc_check_count == (CONNFC_TIMEOUT / CONNFC_CHECK_INTERVAL):
             raise DroneError(f"Could not obtain the reference point after {CONNFC_TIMEOUT} seconds.")
 
-        if self.ref_latlon is None:
+        if self.ref_latlon is None or self.cur_latlon is None:
             self._connfc_check_count += 1
             return
 
         # Here, we've established the reference point and can proceed to the INIT_FC stage.
         self.destroy_timer(self._connfc_timer)
         self.destroy_subscription(self._connfc_sub_vehlocpos)
-        print(f"DRONE: Connected to FC. Reference LatLon: {self.ref_latlon}")
+        print(f"DRONE: Connected to FC. Reference LatLon: {self.ref_latlon}, Current LatLon: {self.cur_latlon}")
         self.drone_state = DroneMode.INIT_FC
         self.drone_init_fc()
 
@@ -103,17 +112,11 @@ class DroneNode(Node):
         self.ref_latlon = LatLon(msg.ref_lat, msg.ref_lon)
 
     def drone_init_fc(self):
-        """ Initialise the drone state and connect to flight controller """
+        """ Initialise the drone state, arm drone in offboard control mode """
         print("DRONE: Initialising FC.")
         if self.drone_state != DroneMode.INIT_FC:
             raise DroneError(f"Expected INIT_FC state, current state is {self.drone_state}")
-
-        self.sub_vehglobpos = self.create_subscription(
-            VehicleGlobalPosition,
-            "/fmu/out/vehicle_global_position",
-            self.fc_recv_vehglobpos,
-            self.qos_profile,
-        )
+        
         self.sub_vehcmdack = self.create_subscription(
             VehicleCommandAck,
             "/fmu/out/vehicle_command_ack",
@@ -171,7 +174,9 @@ class DroneNode(Node):
 
     def fc_recv_vehglobpos(self, msg: VehicleGlobalPosition):
         # Received VehicleGlobalPosition from FC
-        pass
+        if isnan(msg.lat) or isnan(msg.lon):
+            return
+        self.cur_latlon = LatLon(msg.lat, msg.lon)
 
     def fc_recv_vehcmdack(self, msg: VehicleCommandAck):
         # Received VehicleCommandAck from FC
