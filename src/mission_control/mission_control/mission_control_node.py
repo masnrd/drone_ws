@@ -4,8 +4,13 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from enum import IntEnum
 from typing import Dict
 from .maplib import LatLon
-from mc_interface_msgs.msg import Ready, Status
-from mc_interface_msgs.srv import Command
+from mc_interface_msgs.msg import Ready
+from mc_interface_msgs.srv import Command, Status
+
+RTT_WEIGHTING = 0.125
+INITIAL_RTT_ESTIMATE = 0.0015 # for simulation
+RTT_TIMEOUT_MULTIPLIER = 10    # This, multiplied by RTT, determines the timeout
+MC_HEARTBEAT_INTERVAL = 1 # 1 s
 
 class DroneMode(IntEnum):
     """ Drone mode (from perspective of Mission Control) """
@@ -28,11 +33,14 @@ class ReportedDroneMode(IntEnum):
 class DroneState:
     def __init__(self, drone_id: int, node: 'MCNode'):
         self.drone_id = drone_id
+        self.node = node
         self.mode = DroneMode.DISCONNECTED
         self.reported_mode = ReportedDroneMode.UNKNOWN
         self.reported_battery_percentage = 0.0
+        self.estimated_rtt = INITIAL_RTT_ESTIMATE
         self.position = None
         self.last_command = None
+        self.timeout = None
 
         self.sub_ready = node.create_subscription(
             Ready,
@@ -40,16 +48,32 @@ class DroneState:
             node.mc_recv_ready,
             node.qos_profile,
         )
-        self.sub_status = node.create_subscription(
-            Status,
-            f"/drone_{drone_id}/out/status",
-            node.mc_recv_status,
-            node.qos_profile,
-        )
-        self.cmd_cli = node.create_client(
+        self.cli_cmd = node.create_client(
             Command,
             f"/drone_{drone_id}/srv/cmd",
         )
+        self.srv_status = node.create_service(
+            Status,
+            f"/drone_{drone_id}/srv/status",
+            node.mc_recv_status,
+        )
+
+    def update_rtt(self, sample_rtt: float):
+        self.estimated_rtt = ((1 - RTT_WEIGHTING) * self.estimated_rtt) + (RTT_WEIGHTING * sample_rtt)
+        if self.timeout is not None:
+            self.node.destroy_timer(self.timeout)
+
+        timeout_interval = MC_HEARTBEAT_INTERVAL + (self.estimated_rtt * RTT_TIMEOUT_MULTIPLIER)
+        self.timeout = self.node.create_timer(timeout_interval, self.disconnected)
+
+    def disconnected(self):
+        self.node.destroy_timer(self.timeout)
+        self.mode = DroneMode.DISCONNECTED
+        print(f"Warning: Drone {self.drone_id} disconnected.")
+
+    def __repr__(self) -> str:
+        return f"Drone {self.drone_id}:\n\tPosition: {self.position}\n\tMode: {ReportedDroneMode(self.reported_mode).name}\n\tBattery: {self.reported_battery_percentage}%\n\tRTT: {self.estimated_rtt}"
+
 
 class MCNode(Node):
     def __init__(self):
@@ -82,7 +106,7 @@ class MCNode(Node):
         self.drones[drone_id].mode = DroneMode.READY
         print(f"MISSION CONTROL: Drone {drone_id} reports READY")
 
-    def mc_recv_status(self, msg: Status):
+    def mc_recv_status(self, msg: Status.Request, msg_ack: Status.Response):
         """ MC receives a STATUS update from a drone """
         # 1. Identify drone by ID
         drone_id = msg.drone_id
@@ -91,8 +115,15 @@ class MCNode(Node):
         self.drones[drone_id].position = LatLon(msg.lat, msg.lon)
         self.drones[drone_id].reported_mode = ReportedDroneMode(msg.drone_mode)
         self.drones[drone_id].reported_battery_percentage = msg.battery_percentage
-        print(f"MISSION CONTROL: Drone {drone_id}:\n\tPosition: {self.drones[drone_id].position}\n\tMode: {self.drones[drone_id].reported_mode}\n\tBattery: {self.drones[drone_id].reported_battery_percentage}%.")
+        self.drones[drone_id].update_rtt(msg.last_rtt)
+        print(f"MISSION CONTROL: {self.drones[drone_id]}")
 
+        # 3. Send response
+        msg_ack.status_timestamp = msg.timestamp
+        msg_ack.drone_id = drone_id
+        msg_ack.last_cmd_id = -1
+
+        return msg_ack
 
 def main(args=None):
     rclpy.init(args=args)

@@ -5,18 +5,20 @@ from threading import Event
 from typing import Tuple, Any
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from rclpy.task import Future
 from .maplib import LatLon, PositionXY
 from .pathfinder import PathfinderState
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint
-from mc_interface_msgs.msg import Ready, Status
-from mc_interface_msgs.srv import Command
+from mc_interface_msgs.msg import Ready
+from mc_interface_msgs.srv import Command, Status
 
 CONNFC_CHECK_INTERVAL = 0.5  # Interval to check for the refpoint
 CONNFC_TIMEOUT = 15  # Number of seconds until we timeout the refpoint check
-IDLE_PING_INTERVAL = 1 #SWITCH TO 30 ONCE SET  # Number of seconds until we ping MC for an update while in IDLE mode
+IDLE_PING_INTERVAL = 30 #SWITCH TO 30 ONCE SET  # Number of seconds until we ping MC for an update while in IDLE mode
 MAX_IDLE_PINGS = 10  # Ping a max of 10 times before we consider it a failure to connect
 TIMER_INTERVAL = 0.1  # 100 ms
 MC_HEARTBEAT_INTERVAL = 1 # 1 s
+MC_MAX_HEARTBEAT_DROPS = 10
 DEFAULT_TGT_ALTITUDE = 5
 
 DEFAULT_DRONE_ID = 69  #TODO: fix for multiple drones
@@ -40,6 +42,7 @@ class DroneNode(Node):
     - `ref_latlon`: Reference Lat/Lon for NED Local World Frame
     - `cur_latlon`: Current Lat/Lon of drone
     - `tgt_latlon`: Target Lat/Lon of drone, published as PositionXY and only in the TRAVEL, SEARCH and RTB states.
+    - `last_mc_rtt`: Most recent round-trip-time with Mission Control
     - Subscriptions:
         - `sub_vehglobpos`
         - `sub_vehcmdack`
@@ -48,7 +51,8 @@ class DroneNode(Node):
         - `pub_vehcom`
         - `pub_ocm`
         - `pub_mc_ready` (MC)
-        - `pub_mc_status` (MC)
+    - Service Clients:
+        - `cli_mc_status` (MC)
     - Service Servers:
         - `srv_mc_cmd` (MC)
     """
@@ -87,9 +91,12 @@ class DroneNode(Node):
 
         # Connection to MC
         self.pub_mc_ready = None
-        self.pub_mc_status = None
+        self.cli_mc_status = None
         self.srv_mc_cmd = None
         self.mc_heartbeat_timer = None
+        self.mc_last_rtt = 0.0
+        self._mc_last_future = None
+        self._mc_heartbeat_dropped_count = 0
 
         # Miscellaneous
         self.pathfinder = None
@@ -172,7 +179,7 @@ class DroneNode(Node):
 
     def drone_connect_mc(self):
         """ Establish a connection to Mission Control """
-        print("DRONE: Drone armed in Offboard Control Mode. Connecting to Mission Control...")
+        print("DRONE: Connecting to Mission Control...")
         if self.drone_state != DroneMode.CONNECT_MC:
             raise DroneError(f"Expected CONNECT_MC state, current state is {self.drone_state}")
         
@@ -182,10 +189,9 @@ class DroneNode(Node):
             f"/drone_{self.drone_id}/out/ready",
             self.qos_profile,
         )
-        self.pub_mc_status = self.create_publisher(
+        self.cli_mc_status = self.create_client(
             Status,
-            f"/drone_{self.drone_id}/out/status",
-            self.qos_profile
+            f"/drone_{self.drone_id}/srv/status",
         )
         self.srv_mc_cmd = self.create_service(
             Command,
@@ -193,22 +199,19 @@ class DroneNode(Node):
             self.mc_recv_command,
         )
 
+        # Attempt to establish connection with MC
         self.mc_heartbeat_timer = self.create_timer(MC_HEARTBEAT_INTERVAL, self.mc_heartbeat_timer_callback)
-
-        # Switch to IDLE state
-        self.drone_state = DroneMode.IDLE
-        self.drone_idle()
 
     def drone_idle(self):
         """ Wait for MC instructions. """
         if self.drone_state != DroneMode.IDLE:
             raise DroneError(f"Expected IDLE state, current state is {self.drone_state}")
         
-        #TODO: Send connection message
+        # Alert MC of ready state
         self.publish_ready()
         
         # Set timer to wait
-        print("DRONE: Connected to MC. Waiting for instructions...")
+        print("DRONE: Waiting for instructions from MC...")
         self._idle_check_count = 0
         self._idle_timer = self.create_timer(IDLE_PING_INTERVAL, self.drone_idle_ping)
     
@@ -269,16 +272,63 @@ class DroneNode(Node):
 
     def mc_heartbeat_timer_callback(self):
         """ Called to maintain status updates to Mission Control """
-        status = Status()
+        # Detect if previous heartbeat was dropped
+        dropped_heartbeat = False
+        if self._mc_last_future is not None and not self._mc_last_future.done():
+            dropped_heartbeat = True
+            self._mc_last_future.cancel()
+
+        if self.drone_state == DroneMode.CONNECT_MC:
+            # Still attempting to connect to MC
+            if not dropped_heartbeat:
+                # Connection success.
+                print("DRONE: Connected to Mission Control.")
+                self.drone_state = DroneMode.IDLE
+                self.drone_idle()
+        elif self.drone_state in [DroneMode.IDLE, DroneMode.TRAVEL, DroneMode.SEARCH]:
+            # Drone should be in a state where it has previously already established a connection
+            if dropped_heartbeat:
+                self._mc_heartbeat_dropped_count += 1
+                if self._mc_heartbeat_dropped_count >= MC_MAX_HEARTBEAT_DROPS:
+                    #TODO: depends on how independent the drone is -- maybe it's only necessary to reconnect once we're in idle mode
+                    print("DRONE: Lost connection to Mission Control.")
+                    self.destroy_timer(self.mc_heartbeat_timer)
+                    self.drone_state = DroneMode.CONNECT_MC
+                    self.drone_connect_mc()
+                    return
+        elif self.drone_state == DroneMode.RTB:
+            # Returning to Base for reset, should not need this any more
+            self.destroy_timer(self.mc_heartbeat_timer)
+            return
+        else:
+            print("DRONE ERROR: Received heartbeat response when not connected to MC.")
+            return
+
+        status = Status.Request()
         status.drone_id = self.drone_id
         status.drone_mode = self.drone_state
+        status.timestamp = self.get_clock().now().nanoseconds // 1000
+        status.last_rtt = self.mc_last_rtt
         if self.cur_latlon is None:
             status.lat = float('nan')
             status.lon = float('nan')
         else:
             status.lat = self.cur_latlon.lat
             status.lon = self.cur_latlon.lon
-        self.pub_mc_status.publish(status)
+        self._mc_last_future:Future = self.cli_mc_status.call_async(status)
+        self._mc_last_future.add_done_callback(self.mc_recv_status_ack)
+    
+    def mc_recv_status_ack(self, status_future: Future):
+        """ Action upon receiving a status ACK """
+        if status_future.cancelled():
+            return
+        status_ack = status_future.result()
+        cur_ts = (self.get_clock().now().nanoseconds // 1000) / pow(10, 6)
+        prev_ts = status_ack.status_timestamp / pow(10, 6)
+        self.mc_last_rtt = cur_ts - prev_ts # RTT in seconds
+        self._mc_last_future = None
+        self._mc_heartbeat_dropped_count = 0
+        
 
     def fc_recv_vehglobpos(self, msg: VehicleGlobalPosition):
         # Received VehicleGlobalPosition from FC
@@ -305,6 +355,7 @@ class DroneNode(Node):
                 return
             if self.drone_state == DroneMode.INIT_FC:
                 # Drone has been armed in offboard control mode, can switch to CONNECT_MC state.
+                print("DRONE: Armed in OFFBOARD_CONTROL_MODE.")
                 self.drone_state = DroneMode.CONNECT_MC
                 self.drone_connect_mc()
 
