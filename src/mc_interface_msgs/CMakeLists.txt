@@ -25,9 +25,7 @@ file(GLOB MCI_SRVS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "${SRVS_DIR}/*.srv")
 # Generate introspection typesupport for C and C++ and IDL files
 rosidl_generate_interfaces(${PROJECT_NAME}
 	${MCI_MSGS}
-	${MC_SRVS}
-	DEPENDENCIES builtin_interfaces
-	ADD_LINTER_TESTS
+	${MCI_SRVS}
 )
 
 ament_package()
