@@ -13,6 +13,17 @@ In the project root:
 colcon build
 ```
 
+## Development
+Assuming you have built the project before (under Installation), you can simply run the following in the project root to rebuild the Drone node:
+```bash
+make drone
+```
+
+To run the Python tests:
+```bash
+make test
+```
+
 ## Usage
 ### Initialising the Environment
 If the ROS2 distribution hasn't been initialised before, do so:
