@@ -44,7 +44,7 @@ class LatLon:
         return PositionXY(new_x, new_y, refPt)
     
     def __repr__(self) -> str:
-        return f"({self.lat, self.lon})"
+        return f"({self.lat}, {self.lon})"
 
 @dataclass
 class PositionXY:
