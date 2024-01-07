@@ -2,6 +2,44 @@
 
 The drone works according to a state machine. The initialisation takes several stages for the onboard computer to exchange information with the flight controller. This is necessary to obtain the reference latitude and longitude that the flight controller is using to compute the NED local world frame which is used to evaluate `TrajectorySetpoint` messages passed to the flight controller (to actually move the drone).
 
+```mermaid
+stateDiagram-v2
+direction LR
+    sn3: Exit
+    sn2: State -2 (<tt>RTB</tt>)
+    sn1: State -1 (<tt>IDLE</tt>)
+    s0: State 0 (<tt>INIT</tt>)
+    s1: State 1 (<tt>CONNECT_FC</tt>)
+    s2: State 2 (<tt>INIT_FC</tt>)
+    s3: State 3 (<tt>CONNECT_MC</tt>)
+    s4: State 4 (<tt>TRAVEL</tt>)
+    s5: State 5 (<tt>SEARCH</tt>)
+
+    [*] --> s0
+    sn3 --> [*]
+    state Initialisation {
+        s0 --> s1: All variables initialised
+        s1 --> s2: Connected to FC
+        s2 --> s3: Drone armed in Offboard Control Mode
+        s3 --> sn1: Connected to MC
+    }
+    s1 --> sn3: Cannot connect to FC
+    s2 --> sn3: Failed to arm drone
+
+    state Active {
+
+        sn1 --> s4: Received <tt>UPDATE</tt> from MC
+        s4 --> s5: Reached start location in sector
+        s5 --> sn1: Sector search complete
+    }
+    s3 --> sn3: Failed to connect with MC
+
+    sn1 --> s3: Timeout waiting for updates
+    sn1 --> sn2: Reached maximum timeouts
+    sn2 --> sn3: Reached base in error condition.
+```
+
+
 This drone starts at **State 0 (`INIT`)**.
 
 ## State -2: `RTB`
