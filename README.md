@@ -16,12 +16,17 @@ colcon build
 ## Development
 Assuming you have built the project before (under Installation), you can simply run the following in the project root to rebuild the Drone node:
 ```bash
-make drone
+make build
 ```
 
 To run the Python tests:
 ```bash
 make test
+```
+
+To update the simulator coordinates:
+```bash
+make sim_prep
 ```
 
 ## Usage
