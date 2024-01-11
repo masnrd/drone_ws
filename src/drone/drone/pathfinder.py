@@ -9,14 +9,38 @@ NOTICE for Pathfinding team:
 import h3
 import numpy as np
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Dict, NewType
 from .maplib import LatLon
 
 DEFAULT_RESOLUTION = 12
+N_RINGS_CLUSTER = 16     # Defines the number of rings in a cluster by default
+
+# Probability Map type definition: A dictionary, where each H3 hexagon index is mapped to a specific probability.
+ProbabilityMap = NewType(Dict[str, float])
+
+def init_empty_prob_map(centre_pos: LatLon, n_rings: int) -> ProbabilityMap:
+    """
+    Initialises an empty probability map.
+    - `centre_pos`: Centre of the probability map.
+    - `n_rings`: Number of rings around the centre hexagon.
+    """
+    prob_map = {}
+    h3_indices = h3.k_ring(
+        h3.geo_to_h3(centre_pos.lat, centre_pos.lon, DEFAULT_RESOLUTION),
+        n_rings,
+    )
+
+    for h3_index in h3_indices:
+        prob_map[h3_index] = 0
+    
+    return prob_map
 
 class PathfinderState:
     """ Pathfinding state utilised by the drone. """
-    def __init__(self, start_pos: LatLon, prob_map):
+    def __init__(self, start_pos: LatLon, prob_map: ProbabilityMap = None):
+        if prob_map is None:
+            prob_map = init_empty_prob_map(start_pos, N_RINGS_CLUSTER)
+
         start_tup = (start_pos.lat, start_pos.lon)
         self._pathfinder = OutwardSpiralPathFinder(DEFAULT_RESOLUTION, start_tup)  #TODO: to be set by the caller, based on the search method defined by MC
         self._prob_map = prob_map
