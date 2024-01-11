@@ -16,7 +16,7 @@ DEFAULT_RESOLUTION = 12
 N_RINGS_CLUSTER = 16     # Defines the number of rings in a cluster by default
 
 # Probability Map type definition: A dictionary, where each H3 hexagon index is mapped to a specific probability.
-ProbabilityMap = NewType(Dict[str, float])
+ProbabilityMap = NewType("ProbabilityMap", Dict[str, float])
 
 def init_empty_prob_map(centre_pos: LatLon, n_rings: int) -> ProbabilityMap:
     """
