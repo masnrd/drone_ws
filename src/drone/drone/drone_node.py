@@ -271,9 +271,9 @@ class DroneNode(Node):
 
     def drone_run_connect_mc(self):
         """ Connect to Mission Control. """
-        self.mc_cycles = 0
-        self.mc_dropped_count = 0
         if self.mc_hb_timer is None:
+            self.mc_cycles = 0
+            self.mc_dropped_count = 0
             self.mc_hb_timer = self.create_timer(MC_HEARTBEAT_INTERVAL, self.mc_run)
 
     def drone_run_idle(self):
@@ -326,11 +326,13 @@ class DroneNode(Node):
     def mc_run(self):
         """ Callback to send a heartbeat to mission control. """
         hb_dropped = False
-        if self.mc_prev_future is not None and not self.mc_prev_future.done():
+        if self.mc_prev_future is None or not self.mc_prev_future.done():
             # Still waiting for a response from mission control
             hb_dropped = True
-            self.mc_prev_future.cancel()
+            if self.mc_prev_future is not None:
+                self.mc_prev_future.cancel()
         else:
+            # Previous response was received.
             self.mc_dropped_count = 0
 
         # Perform actions based on current state
@@ -339,17 +341,23 @@ class DroneNode(Node):
             if not hb_dropped:
                 # Previous heartbeat cycle reached mission control.
                 self.change_state(DroneMode.IDLE, "Connected to MC.")
+            else:
+                self.mc_dropped_count += 1
         elif self.drone_state in [DroneMode.IDLE, DroneMode.TRAVEL, DroneMode.SEARCH]:
             # Connection has already been established
             if hb_dropped:
                 # Connection possibly broken, try again
                 self.mc_dropped_count += 1
-                if self.mc_dropped_count >= MC_TIMEOUT:
-                    self.destroy_timer(self.mc_hb_timer)
-                    self.mc_hb_timer = None
-                    self.change_state(DroneMode.CONNECT_MC, "Lost connection to mission control.")
-                    #TODO: should store the OLD mode such that we can recover that once we regain connection.
-                    return
+        
+        if self.mc_dropped_count >= MC_TIMEOUT:
+            self.destroy_timer(self.mc_hb_timer)
+            self.mc_hb_timer = None
+            if self.drone_state == DroneMode.CONNECT_MC:
+                self.raise_error(f"Could not connect to mission control after {MC_TIMEOUT * MC_HEARTBEAT_INTERVAL} seconds.")
+                return
+            self.change_state(DroneMode.CONNECT_MC, "Lost connection to mission control.")
+            #TODO: should store the OLD mode such that we can recover that once we regain connection.
+            return
         
         # Send status
         self.mc_prev_future = self.mc_request_status()
