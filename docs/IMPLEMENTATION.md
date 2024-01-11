@@ -21,20 +21,18 @@ direction LR
         s0 --> s1: All variables initialised
         s1 --> s2: Connected to FC
         s2 --> s3: Drone armed in Offboard Control Mode
-        s3 --> sn1: Connected to MC
+        s3 --> sn1: Sent <tt>READY</tt> to MC
     }
-    s1 --> sn3: Cannot connect to FC
     s2 --> sn3: Failed to arm drone
 
     state Active {
-
-        sn1 --> s4: Received <tt>UPDATE</tt> from MC
+        sn1 --> s4: Received <tt>COMMAND</tt> from MC
         s4 --> s5: Reached start location in sector
-        s5 --> sn1: Sector search complete
+        s5 --> sn1: Sector search complete, send <tt>READY</tt> to MC
     }
     s3 --> sn3: Failed to connect with MC
 
-    sn1 --> s3: Timeout waiting for updates
+    sn1 --> s3: Timeout waiting for updates, re-send <tt>READY</tt> to MC
     sn1 --> sn2: Reached maximum timeouts
     sn2 --> sn3: Reached base in error condition.
 ```
@@ -50,7 +48,7 @@ The drone in this state simply heads back to the last known latitude and longitu
 ## State -1: `IDLE`
 Here, the drone has either completed all instructions from Mission Control, or has yet to receive any new instructions.
 
-The drone, in this state, returns to **State 3 (`CONNECT_MC`)** after a given timeout to 'remind' the mission control that it still is waiting for instructions (TODO: could probably send a `DONE` message instead).
+The drone, in this state, returns to **State 3 (`CONNECT_MC`)** after a given timeout to retransmit its `READY` message (in case its earlier message was dropped).
 
 After a certain number of timeouts, the drone returns to base (i.e. switches to **State -2 (`RTB`)**).
 
@@ -79,7 +77,8 @@ Here, the actual subscriptions and publishers that the onboard computer needs to
 After the drone has been successfully **armed** (identified with `VehicleCommandAck`), the system progresses to the next stage.
 
 ## State 3: `CONNECT_MC`
-Here, the onboard computer initialises a connection to Mission Control, and subscribes to further updates. The system then progresses to **State -1 (`IDLE`)**.
+Here, the onboard computer initialises its connection to Mission Control. It sends a `READY` message. The system then progresses to **State -1 (`IDLE`)**.
+- Since it's possible for the message to be dropped, the `IDLE` stage uses timeouts to send more `READY` message if no commands are received.
 
 ## State 4: `TRAVEL`
 Here, the onboard computer has received instructions from Mission Control. It initialises the search sector's probability map from the message, and travels to the start location within the search sector.
@@ -89,5 +88,5 @@ Once it reaches the start location (identified through the `VehicleGlobalPositio
 ## State 5: `SEARCH`
 Here, the onboard computer searches the sector.
 
-It remains in this state until it has searched the entire sector. Once this is so, it sends a `DONE` message to Mission Control, and enters **State -1 (`IDLE`)**.
+It remains in this state until it has searched the entire sector. Once this is so, it sends a `READY` message to Mission Control, and re-enters **State -1 (`IDLE`)**.
 

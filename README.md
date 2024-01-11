@@ -50,7 +50,12 @@ In another terminal, initialise the micro XRCE-DDS agent:
 MicroXRCEAgent udp4 -p 8888
 ```
 
-Having initialised the environment, run the central interface node and the pathfinder node on a third terminal:
+First, initialise mission control on one terminal.
+```bash
+ros2 run mission_control mission_control_node
+```
+
+Then, initialise the drone (with hardcoded ID `69`) on another terminal. The drone node will first connect to the flight controller, then report `READY` to mission control, before consistently updating its status.
 ```bash
 ros2 run drone drone_node
 ``````
