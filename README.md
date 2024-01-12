@@ -75,3 +75,6 @@ Currently, two endpoints are provided on the Flask backend.
     - The only supported drone ID is `69` for now.
     - It is recommended to choose a latitude and longitude close to the starting point of the drone.
     - Note that the command is dropped if the drone is not connected to mission control, this is still in progress.
+
+#### Frontend
+The frontend can be accessed at `127.0.0.1:5000`. For now, this is simply a table displaying the state of all drones (just 1 drone for now), and polls the `/api/info` endpoint every second.
