@@ -79,7 +79,7 @@ class DroneState:
         self.last_command: Union[Command.Request, None] = None
 
     def toJSON(self) -> str:
-        lat, lon = float('nan'), float('nan')
+        lat, lon = "null", "null"
         if self.position is not None:
             lat, lon = self.position.lat, self.position.lon
         command = "-"
@@ -93,7 +93,7 @@ class DroneState:
         ret += f"\"estimated_rtt\": {self.estimated_rtt}, "
         ret += f"\"lat\": {lat}, "
         ret += f"\"lon\": {lon}, "
-        ret += f"\"last_command\": {command} "
+        ret += f"\"last_command\": \"{command}\" "
         ret += "}"
 
         return ret
