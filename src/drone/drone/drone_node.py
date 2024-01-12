@@ -1,15 +1,14 @@
 import struct
 from math import isnan
 from enum import IntEnum
-from threading import Event
 from typing import Dict, List, Any
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.task import Future
-from .maplib import LatLon, PositionXY
+from .maplib import LatLon
 from .pathfinder import PathfinderState
-from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint
+from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode
 from mc_interface_msgs.msg import Ready
 from mc_interface_msgs.srv import Command, Status
 
@@ -120,6 +119,12 @@ class DroneNode(Node):
             VehicleGlobalPosition,
             "/fmu/out/vehicle_global_position",
             self.fc_recv_vehglobpos,
+            self.qos_profile,
+        )
+        self.sub_vehconmode = self.create_subscription(
+            VehicleControlMode,
+            "/fmu/out/vehicle_control_mode",
+            self.fc_recv_vehconmode,
             self.qos_profile,
         )
         self.pub_vehcom = self.create_publisher(
@@ -410,6 +415,13 @@ class DroneNode(Node):
                 #TODO: add check that the ack is for an ARMING request
                 self.change_state(DroneMode.CONNECT_MC, "Drone has been armed in offboard mode.")
             #TODO: add disarm check
+                
+    def fc_recv_vehconmode(self, msg: VehicleControlMode):
+        if self.drone_state in [DroneMode.RTB, DroneMode.IDLE, DroneMode.CONNECT_MC, DroneMode.TRAVEL, DroneMode.SEARCH]:
+            #TODO: safer way is just to take off the drone upon arming.
+            if not msg.flag_armed or not msg.flag_control_offboard_enabled:
+                # Drone was disarmed
+                self.change_state(DroneMode.INIT_FC, "Drone disconnected from FC, reconnecting.")
 
     def _fc_recv_locpos(self, msg: VehicleLocalPosition):
         """
