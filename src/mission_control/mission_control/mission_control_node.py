@@ -1,13 +1,12 @@
 import rclpy
-import struct
 import threading
-import json
 from queue import Queue, Empty
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from enum import IntEnum
 from typing import Dict, Tuple
-from flask import Flask, request
+from flask import Flask, request, send_from_directory, render_template
+from ament_index_python import get_package_share_directory
+from pathlib import Path
 from .maplib import LatLon
 from .drone_utils import DroneId, DroneConnection, DroneState, DroneCommand, DroneMode, DroneCommandId
 from .drone_utils import DroneCommand_RTB, DroneCommand_MOVE_TO, DroneCommand_SEARCH_SECTOR
@@ -98,13 +97,23 @@ class MCNode(Node):
 
 class MCWebServer:
     def __init__(self, drones: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
-        self.app = Flask("Mission Control")
+        self.static_dir = Path(get_package_share_directory("mission_control")).joinpath("frontend")
+        self.app = Flask(
+            "Mission Control", 
+            static_url_path='',
+            static_folder=self.static_dir,
+            template_folder=self.static_dir,
+        )
         self.drones = drones
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
 
         # Set up Endpoints
+        self.app.add_url_rule("/", view_func=self.route_index)
         self.app.add_url_rule("/api/info", view_func=self.route_info)
         self.app.add_url_rule("/api/action/search", view_func=self.route_action_search)
+
+    def route_index(self):
+        return send_from_directory(self.static_dir, "index.html")
 
     def route_info(self) -> Dict[int, str]:
         ret: Dict[int, str] = {}

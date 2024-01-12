@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+from pathlib import Path
 
 package_name = 'mission_control'
 
@@ -10,6 +11,9 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (f'share/{package_name}/frontend/', [str(p) for p in Path("static").glob('*.html')]),
+        (f'share/{package_name}/frontend/css', [str(p) for p in Path("static/css").glob('*.css')]),
+        (f'share/{package_name}/frontend/js', [str(p) for p in Path("static/js").glob('*.js')]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
