@@ -2,20 +2,22 @@ import rclpy
 import struct
 import threading
 import json
-from queue import Queue
+from queue import Queue, Empty
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from enum import IntEnum
-from typing import Dict
-from flask import Flask
+from typing import Dict, Tuple
+from flask import Flask, request
 from .maplib import LatLon
-from .drone_utils import DroneId, DroneConnection, DroneState, DroneCommand, DroneMode
+from .drone_utils import DroneId, DroneConnection, DroneState, DroneCommand, DroneMode, DroneCommandId
 from .drone_utils import DroneCommand_RTB, DroneCommand_MOVE_TO, DroneCommand_SEARCH_SECTOR
 from mc_interface_msgs.msg import Ready
 from mc_interface_msgs.srv import Command, Status
 
+COMMAND_CHECK_INTERVAL = 1
+
 class MCNode(Node):
-    def __init__(self, drone_states: Dict[DroneId, DroneState], commands: Queue):
+    def __init__(self, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
         super().__init__("mission_control")
 
         self.qos_profile = QoSProfile(
@@ -26,7 +28,8 @@ class MCNode(Node):
         )
 
         # Initialise command queue
-        self.commands = commands
+        self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
+        self.command_loop = self.create_timer(COMMAND_CHECK_INTERVAL, self.check_command_loop)
 
         # Initialise drone connections
         self.connections:Dict[DroneId, DroneConnection] = {}
@@ -42,6 +45,14 @@ class MCNode(Node):
     def raise_error(self, msg: str):
         self.get_logger().error(f"MISSION CONTROL ERROR: {msg}")
         raise Exception(msg)
+    
+    def check_command_loop(self):
+        try:
+            drone_id, command = self.commands.get(block=False)
+            print(f"MISSION CONTROL: User entered command {DroneCommandId(command.command_id).name}")
+            self.mc_send_command(drone_id, command)
+        except Empty:
+            pass
 
     def mc_send_command(self, drone_id: DroneId, drone_cmd: DroneCommand):
         """ MC sends a Command to a given drone """
@@ -59,9 +70,6 @@ class MCNode(Node):
             return
         
         self.log(f"Drone {drone_id} reports READY")
-
-        #TODO: temporary hardcoded command sent
-        self.hardcoded_send_command(drone_id)
 
     def mc_recv_status(self, msg: Status.Request, msg_ack: Status.Response):
         """ MC receives a STATUS update from a drone """
@@ -88,26 +96,39 @@ class MCNode(Node):
 
         return msg_ack
 
-    def hardcoded_send_command(self, drone_id: DroneId):
-        tgt = LatLon(1.340643554050367, 103.9626564184675)
-        drone_cmd = DroneCommand_SEARCH_SECTOR(tgt, None)
-        self.mc_send_command(drone_id, drone_cmd)
-
 class MCWebServer:
-    def __init__(self, drones: Dict[int, DroneState], commands: Queue):
+    def __init__(self, drones: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
         self.app = Flask("Mission Control")
         self.drones = drones
-        self.commands = commands
+        self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
 
         # Set up Endpoints
-        self.app.add_url_rule("/", view_func=self.route_index)
+        self.app.add_url_rule("/api/info", view_func=self.route_info)
+        self.app.add_url_rule("/api/action/search", view_func=self.route_action_search)
 
-    def route_index(self) -> Dict[int, str]:
+    def route_info(self) -> Dict[int, str]:
         ret: Dict[int, str] = {}
         for drone_id, drone in self.drones.items():
             ret[drone_id] = drone.toJSON()
         
         return ret
+    
+    def route_action_search(self) -> Dict[int, str]:
+        drone_id = request.args.get("drone_id", type=int, default=None)
+        lat = request.args.get("lat", type=float, default=None)
+        lon = request.args.get("lon", type=float, default=None)
+
+        if drone_id is None:
+            return {"error": "need drone_id"}, 400
+
+        if lat is None or lon is None:
+            return {"error": "need latitude/longitude parameters as float"}, 400
+        
+        command_tup = (drone_id, DroneCommand_SEARCH_SECTOR(LatLon(lat, lon), None))
+
+        self.commands.put_nowait(command_tup)
+        
+        return {}, 200
     
     def run(self):
         self.app.run(debug=True, use_reloader=False)
@@ -116,7 +137,7 @@ def main(args=None):
     drone_states = {
         DroneId(69): DroneState(69)
     }
-    commands = Queue()
+    commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
 
     # Start web server
     webserver = MCWebServer(drone_states, commands)
