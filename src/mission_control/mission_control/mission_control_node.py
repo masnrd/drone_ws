@@ -1,9 +1,13 @@
 import rclpy
 import struct
+import threading
+import json
+from queue import Queue
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from enum import IntEnum
 from typing import Dict
+from flask import Flask
 from .maplib import LatLon
 from mc_interface_msgs.msg import Ready
 from mc_interface_msgs.srv import Command, Status
@@ -21,6 +25,7 @@ class DroneMode(IntEnum):
 
 class ReportedDroneMode(IntEnum):
     """ Drone mode reported by the drone itself """
+    ERROR      = -99
     UNKNOWN    = -3  # Drone has not reported yet
     RTB        = -2  # Drone is returning to MC
     IDLE       = -1  # Drone is idle
@@ -110,17 +115,37 @@ class DroneState:
     def __repr__(self) -> str:
         return f"Drone {self.drone_id}:\n\tPosition: {self.position}\n\tMode: {ReportedDroneMode(self.reported_mode).name}\n\tBattery: {self.reported_battery_percentage}%\n\tRTT: {self.estimated_rtt}"
 
+    def toJSON(self) -> str:
+        return json.dumps(self, cls=DroneStateEncoder)
+
+class DroneStateEncoder(json.JSONEncoder):
+    def default(self, o: DroneState):
+
+        
+        return {
+            "drone_id": o.drone_id,
+            "mode": DroneMode(o.mode).name,
+            "reported_mode": ReportedDroneMode(o.reported_mode).name,
+            "reported_battery_percentage": o.reported_battery_percentage,
+            "estimated_rtt": o.estimated_rtt,
+            "lat": o.position.lat if o.position is not None else float('nan'),
+            "lon": o.position.lon if o.position is not None else float('nan'),
+            "last_command": DroneCommandId(o.last_command.cmd_id).name if o.last_command is not None else None,
+        }
+    
 
 class MCNode(Node):
-    def __init__(self):
+    def __init__(self, drones_dict: Dict[int, DroneState], commands: Queue):
         super().__init__("mission_control")
-        self.drones:Dict[int, DroneState] = {}
+        self.drones:Dict[int, DroneState] = drones_dict
+        self.commands = commands
         self.qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
             history=HistoryPolicy.KEEP_LAST,
             depth=1
         )
+        self.get_logger().info("Mission Control initialised.")
 
         self.add_drone(69)  #TODO: Handle multiple drones
         print("MISSION CONTROL: Initialised.")
@@ -141,7 +166,7 @@ class MCNode(Node):
 
         # 2. Update drone status
         self.drones[drone_id].mode = DroneMode.READY
-        print(f"MISSION CONTROL: Drone {drone_id} reports READY")
+        self.get_logger().info(f"MISSION CONTROL: Drone {drone_id} reports READY")
 
         #TODO: temporary hardcoded command sent
         self.hardcoded_send_command(drone_id)
@@ -157,7 +182,7 @@ class MCNode(Node):
         drone.reported_mode = ReportedDroneMode(msg.drone_mode)
         drone.reported_battery_percentage = msg.battery_percentage
         drone.update_rtt(msg.last_rtt)
-        print(f"MISSION CONTROL: {drone}")
+        self.get_logger().info(f"MISSION CONTROL: {drone}")
 
         # 3. Send response
         msg_ack.status_timestamp = msg.timestamp
@@ -175,10 +200,38 @@ class MCNode(Node):
         drone_cmd = DroneCommand_SEARCH_SECTOR(tgt, None)
         self.mc_send_command(drone_cmd, drone_id)
 
-def main(args=None):
-    rclpy.init(args=args)
-    mc_node = MCNode()
+class MCWebServer:
+    def __init__(self, drones: Dict[int, DroneState], commands: Queue):
+        self.app = Flask("Mission Control")
+        self.drones = drones
+        self.commands = commands
+
+        # Set up Endpoints
+        self.app.add_url_rule("/", view_func=self.route_index)
+
+    def route_index(self) -> Dict[int, str]:
+        ret: Dict[int, str] = {}
+        for drone_id, drone in self.drones.items():
+            ret[drone_id] = drone.toJSON()
+        
+        return ret
     
+    def run(self):
+        self.app.run(debug=True, use_reloader=False)
+
+def main(args=None):
+    drones = {}
+    commands = Queue()
+
+    # Start web server
+    webserver = MCWebServer(drones, commands)
+    webserver_thread = threading.Thread(target=webserver.run, daemon=True)
+    webserver_thread.start()
+
+    # Start rclpy node
+    rclpy.init(args=args)
+
+    mc_node = MCNode(drones, commands)
     rclpy.spin(mc_node)
 
     mc_node.destroy_node()
