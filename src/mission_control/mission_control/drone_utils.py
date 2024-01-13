@@ -45,6 +45,7 @@ class DroneCommand:
         self.command_data = command_data
 
     def generate_command(self, drone_id: DroneId) -> Command.Request:
+        """ Generates a ROS2 Request that will be sent over ROS to the drone. """
         cmd = Command.Request()
         cmd.drone_id = drone_id
         cmd.cmd_id = self.command_id
@@ -69,28 +70,53 @@ class DroneCommand_MOVE_TO(DroneCommand):
 
 
 class DroneState:
-    """ State of the drone """
+    """
+    State of the drone.
+    - The webserver using this SHOULD NOT MODIFY any of the attributes, and should instead
+    access data via the getter methods provided.
+    - This is because attribute modification is done by the ROS2 node which runs in a separate thread.
+    """
     def __init__(self, drone_id: DroneId):
-        self.drone_id = drone_id
-        self.mode = DroneMode.DISCONNECTED
-        self.battery_percentage = 0.0
-        self.estimated_rtt = 0.0
-        self.position: Union[LatLon, None] = None
-        self.last_command: Union[Command.Request, None] = None
+        self._drone_id = drone_id
+        self._mode = DroneMode.DISCONNECTED
+        self._battery_percentage = 0.0
+        self._estimated_rtt = 0.0
+        self._position: Union[LatLon, None] = None
+        self._last_command: Union[DroneCommand, None] = None
+
+    def get_drone_id(self) -> DroneId:
+        return self._drone_id
+    
+    def get_mode(self) -> DroneMode:
+        return self._mode
+    
+    def get_battery_percentage(self) -> float:
+        return self._battery_percentage
+    
+    def get_estimated_rtt(self) -> float:
+        return self._estimated_rtt
+    
+    def get_position(self) -> Union[LatLon, None]:
+        """ Returns the current LatLon of the drone, or None if not set yet. """
+        return self._position
+    
+    def get_last_command(self) -> Union[DroneCommand, None]:
+        """ Returns the most recent DroneCommand sent to the drone, or None if not set yet. """
+        return self._last_command
 
     def toJSON(self) -> str:
         lat, lon = "null", "null"
-        if self.position is not None:
-            lat, lon = self.position.lat, self.position.lon
+        if self._position is not None:
+            lat, lon = self._position.lat, self._position.lon
         command = "-"
-        if self.last_command is not None:
-            command = DroneCommandId(self.last_command.cmd_id).name
+        if self._last_command is not None:
+            command = DroneCommandId(self._last_command.command_id).name
         
         ret = "{"
-        ret += f"\"drone_id\": {self.drone_id},"
-        ret += f"\"mode\": \"{DroneMode(self.mode).name}\", "
-        ret += f"\"battery_percentage\": {self.battery_percentage}, "
-        ret += f"\"estimated_rtt\": {self.estimated_rtt}, "
+        ret += f"\"drone_id\": {self._drone_id},"
+        ret += f"\"mode\": \"{DroneMode(self._mode).name}\", "
+        ret += f"\"battery_percentage\": {self._battery_percentage}, "
+        ret += f"\"estimated_rtt\": {self._estimated_rtt}, "
         ret += f"\"lat\": {lat}, "
         ret += f"\"lon\": {lon}, "
         ret += f"\"last_command\": \"{command}\" "
@@ -100,10 +126,10 @@ class DroneState:
     
     def __repr__(self) -> str:
         lat, lon = float('nan'), float('nan')
-        if self.position is not None:
-            lat, lon = self.position.lat, self.position.lon
+        if self._position is not None:
+            lat, lon = self._position.lat, self._position.lon
         
-        return f"Drone {self.drone_id}:\n\tPosition: {lat}, {lon}\n\tMode: {DroneMode(self.mode).name}\n\tBattery: {self.battery_percentage}%\n\tRTT: {self.estimated_rtt}"
+        return f"Drone {self._drone_id}:\n\tPosition: {lat}, {lon}\n\tMode: {DroneMode(self._mode).name}\n\tBattery: {self._battery_percentage}%\n\tRTT: {self._estimated_rtt}"
 
 
 class DroneConnection:
@@ -133,18 +159,18 @@ class DroneConnection:
         )
     
     def update_rtt(self, sample_rtt: float):
-        if self.state.estimated_rtt == 0.0:
-            self.state.estimated_rtt = sample_rtt
+        if self.state._estimated_rtt == 0.0:
+            self.state._estimated_rtt = sample_rtt
         else:
-            self.estimated_rtt = ((1 - RTT_WEIGHTING) * self.state.estimated_rtt) + (RTT_WEIGHTING * sample_rtt)
+            self.estimated_rtt = ((1 - RTT_WEIGHTING) * self.state._estimated_rtt) + (RTT_WEIGHTING * sample_rtt)
 
         if self.timeout is not None:
             self.node.destroy_timer(self.timeout)
 
-        timeout_interval = MC_HEARTBEAT_INTERVAL + (self.state.estimated_rtt * RTT_TIMEOUT_MULTIPLIER)
+        timeout_interval = MC_HEARTBEAT_INTERVAL + (self.state._estimated_rtt * RTT_TIMEOUT_MULTIPLIER)
         self.timeout = self.node.create_timer(timeout_interval, self.disconnected_action)
 
     def disconnected_action(self):
         self.node.destroy_timer(self.timeout)
-        self.state.mode = DroneMode.DISCONNECTED
-        print(f"Warning: Drone {self.state.drone_id} disconnected.")
+        self.state._mode = DroneMode.DISCONNECTED
+        print(f"Warning: Drone {self.state._drone_id} disconnected.")
