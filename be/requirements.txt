@@ -1,0 +1,5 @@
+h3==3.7.6
+numpy==1.26.0
+Flask
+Flask-Cors==4.0.0
+pymap3d
