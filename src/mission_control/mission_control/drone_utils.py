@@ -144,17 +144,17 @@ class DroneConnection:
         self.pending_cmd_fut = None
         self.sub_ready = node.create_subscription(
             Ready,
-            f"/drone_{drone_id}/out/ready",
+            f"/mc_{drone_id}/mc/out/ready",
             node.mc_recv_ready,
             node.qos_profile,
         )
         self.cli_cmd = node.create_client(
             Command,
-            f"/drone_{drone_id}/srv/cmd",
+            f"/mc_{drone_id}/mc/srv/cmd",
         )
         self.srv_status = node.create_service(
             Status,
-            f"/drone_{drone_id}/srv/status",
+            f"/mc_{drone_id}/mc/srv/status",
             node.mc_recv_status,
         )
     

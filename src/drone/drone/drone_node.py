@@ -6,13 +6,14 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.task import Future
+from rclpy.exceptions import ParameterUninitializedException
 from .maplib import LatLon
 from .pathfinder import PathfinderState
-from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode
+from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode, VehicleStatus
 from mc_interface_msgs.msg import Ready
 from mc_interface_msgs.srv import Command, Status
 
-DEFAULT_DRONE_ID = 69  #TODO: fix for multiple drones
+DEFAULT_DRONE_ID = 69
 CYCLE_INTERVAL = 0.1   # 100ms between each cycle.
 FC_HEARTBEAT_INTERVAL = 0.1
 MC_HEARTBEAT_INTERVAL = 1.0
@@ -95,6 +96,15 @@ class DroneNode(Node):
 
     def __init__(self):
         super().__init__("drone")
+
+        # Obtain drone ID
+        try:
+            self.declare_parameter("droneId", rclpy.Parameter.Type.INTEGER)
+            drone_id = self.get_parameter("droneId").get_parameter_value().integer_value
+        except ParameterUninitializedException:
+            drone_id = None
+
+        # Initialise drone node
         self.qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -103,59 +113,63 @@ class DroneNode(Node):
         )
         self.drone_state = DroneMode.INIT
         self.next_state = None   # Used to differentiate between a MOVE_TO command and SEARCH_SECTOR command.
-        self.drone_id = DEFAULT_DRONE_ID
+        self.drone_id = drone_id if drone_id is not None else DEFAULT_DRONE_ID
+        self.log("Initialised.")
 
         self.idle_cycles = 0
 
-        # Initialise subs/pubs
+        # Initialise subs/pubs for this particular drone
+        self._drone_ns = f"/px4_{drone_id}" if drone_id is not None else ""
         ## Flight Controller
+        self.fc_sys_id = None
+        self.fc_com_id = None
         self.sub_vehcmdack = self.create_subscription(
             VehicleCommandAck,
-            "/fmu/out/vehicle_command_ack",
+            f"{self._drone_ns}/fmu/out/vehicle_command_ack",
             self.fc_recv_vehcmdack,
             self.qos_profile,
         )
         self.sub_vehglobpos = self.create_subscription(
             VehicleGlobalPosition,
-            "/fmu/out/vehicle_global_position",
+            f"{self._drone_ns}/fmu/out/vehicle_global_position",
             self.fc_recv_vehglobpos,
             self.qos_profile,
         )
         self.sub_vehconmode = self.create_subscription(
             VehicleControlMode,
-            "/fmu/out/vehicle_control_mode",
+            f"{self._drone_ns}/fmu/out/vehicle_control_mode",
             self.fc_recv_vehconmode,
             self.qos_profile,
         )
         self.pub_vehcom = self.create_publisher(
             VehicleCommand,
-            "/fmu/in/vehicle_command",
+            f"{self._drone_ns}/fmu/in/vehicle_command",
             self.qos_profile,
         )
         self.pub_ocm = self.create_publisher(
             OffboardControlMode,
-            "/fmu/in/offboard_control_mode",
+            f"{self._drone_ns}/fmu/in/offboard_control_mode",
             self.qos_profile,
         )
         self.pub_trajsp = self.create_publisher(
             TrajectorySetpoint,
-            "/fmu/in/trajectory_setpoint",
+            f"{self._drone_ns}/fmu/in/trajectory_setpoint",
             self.qos_profile,
         )
 
         ## Mission Control
         self.pub_mc_ready = self.create_publisher(
             Ready,
-            f"/drone_{self.drone_id}/out/ready",
+            f"/mc_{drone_id}/mc/out/ready",
             self.qos_profile,
         )
         self.cli_mc_status = self.create_client(
             Status,
-            f"/drone_{self.drone_id}/srv/status",
+            f"/mc_{drone_id}/mc/srv/status",
         )
         self.srv_mc_cmd = self.create_service(
             Command,
-            f"/drone_{self.drone_id}/srv/cmd",
+            f"/mc_{drone_id}/mc/srv/cmd",
             self.mc_handle_command,
         )
 
@@ -180,7 +194,7 @@ class DroneNode(Node):
         return self.get_clock().now().nanoseconds // 1000
     
     def log(self, msg: str):
-        print(f"DRONE: {msg}")
+        print(f"D{self.drone_id}: {msg}")
 
     def change_state(self, new_state: DroneMode, msg: str = ""):
         #TODO: place state transitions here?
@@ -241,12 +255,18 @@ class DroneNode(Node):
         self.tgt_altitude = DEFAULT_TGT_ALTITUDE
 
         # Connection to FC
-        ## Connect to FC by attempting to get a fix on what our local position is
+        ## Connect to FC by attempting to get a fix on what our local position is and to get system and component ID
         self._connfc_check_count = 0
         self._connfc_sub_vehlocpos = self.create_subscription(
             VehicleLocalPosition,
-            "/fmu/out/vehicle_local_position",
+            f"{self._drone_ns}/fmu/out/vehicle_local_position",
             self._fc_recv_locpos,
+            self.qos_profile,
+        )
+        self._connfc_sub_vehstatus = self.create_subscription(
+            VehicleStatus,
+            f"{self._drone_ns}/fmu/out/vehicle_status",
+            self._fc_recv_vehstatus,
             self.qos_profile,
         )
         self.change_state(DroneMode.CONNECT_FC)
@@ -254,17 +274,24 @@ class DroneNode(Node):
     def drone_run_connect_fc(self):
         """ Connect to the Flight Controller """
         if self._connfc_check_count == (CONNFC_TIMEOUT // CYCLE_INTERVAL):
-            self.raise_error(f"Could not obtain reference point after {CONNFC_TIMEOUT} seconds.")
+            self.raise_error(f"Could not obtain reference point or system ID after {CONNFC_TIMEOUT} seconds.")
             return
         
         # Check if we've received a reference point from our LocalPosition and GlobalPosition subscriptions
         if self.ref_latlon is None or self.cur_latlon is None:
             self._connfc_check_count += 1
             return
+        
+        # Ensure the system ID and component ID is known
+        if self.fc_sys_id is None or self.fc_com_id is None:
+            self._connfc_check_count += 1
+            return
 
         # Here, we've established the reference point and can proceed to the INIT_FC stage.
         self.destroy_subscription(self._connfc_sub_vehlocpos)
-        self.change_state(DroneMode.INIT_FC, f"Ref LatLon: {self.ref_latlon}, Cur LatLon: {self.cur_latlon}")
+        self.destroy_subscription(self._connfc_sub_vehstatus)
+        self.fc_publish_vehiclecommand(VehicleCommand.VEHICLE_CMD_NAV_TAKEOFF)
+        self.change_state(DroneMode.INIT_FC, f"Ref LatLon/Cur LatLon: {self.ref_latlon}/{self.cur_latlon}. System ID/Component Id: {self.fc_sys_id}/{self.fc_com_id}")
 
     def drone_run_init_fc(self):
         """ Initialise Flight Controller. """
@@ -431,6 +458,11 @@ class DroneNode(Node):
         if isnan(msg.ref_lat) or isnan(msg.ref_lon):
             return
         self.ref_latlon = LatLon(msg.ref_lat, msg.ref_lon)
+                
+    def _fc_recv_vehstatus(self, msg: VehicleStatus):
+        """ Handle an incoming VehicleStatus message from FC. """
+        self.fc_sys_id = msg.system_id
+        self.fc_com_id = msg.component_id
 
     # --- PUBLISHERS ---
     def fc_publish_heartbeat(self):
@@ -442,8 +474,8 @@ class DroneNode(Node):
     def fc_publish_vehiclecommand(self, cmd: int, p1: float = 0.0, p2: float = 0.0, p3: float = 0.0):
         msg = VehicleCommand()
         msg.command = cmd
-        msg.target_system, msg.target_component = 1, 1
-        msg.source_system, msg.source_component = 1, 1
+        msg.target_system, msg.target_component = self.fc_sys_id, self.fc_com_id
+        msg.source_system, msg.source_component = 0, 0
         msg.from_external = True
         msg.param1, msg.param2, msg.param3 = p1, p2, p3
         msg.timestamp = self.clock_microseconds()

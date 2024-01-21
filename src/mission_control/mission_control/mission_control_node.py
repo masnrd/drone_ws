@@ -94,7 +94,8 @@ class MCNode(Node):
 
 def main(args=None):
     drone_states = {
-        DroneId(69): DroneState(69)
+        DroneId(1): DroneState(1),
+        DroneId(2): DroneState(2),
     }
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
 
