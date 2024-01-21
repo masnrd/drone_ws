@@ -83,9 +83,8 @@ ros2 run drone drone_node --ros-args -p droneId:=[droneId]
 Currently, two endpoints are provided on the Flask backend.
 - `/api/info`: Returns a dump of the state of every drone connected (just 1 drone for now).
 - `/api/action/search?drone_id=[drone_id]&lat=[latitude]&lon=[longitude]`: Provides a `SEARCH_SECTOR` command to drone `drone_id`, starting at `latitude, longitude`.
-    - The only supported drone ID is `69` for now.
     - It is recommended to choose a latitude and longitude close to the starting point of the drone.
     - Note that the command is dropped if the drone is not connected to mission control, this is still in progress.
 
 #### Frontend
-The frontend can be accessed at `127.0.0.1:5000`. For now, this is simply a table displaying the state of all drones (just 1 drone for now), and polls the `/api/info` endpoint every second.
+The frontend can be accessed at `127.0.0.1:5000`. For now, this is simply a table displaying the state of all drones (defined by the `drone_states` dictionary), and polls the `/api/info` endpoint every second.
