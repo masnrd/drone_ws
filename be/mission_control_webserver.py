@@ -9,13 +9,16 @@ A Flask webserver that:
     - The web client is provided in the `static` directory provided in the package.
 """
 import logging
-from flask import Flask, request, send_from_directory, Response
+from flask import Flask, request, send_from_directory, Response, jsonify
+import json
+
 from typing import Dict, Tuple
 from queue import Queue
 from pathlib import Path
 
 from drone_utils import DroneState, DroneId
 from drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
+from run_clustering import run_clustering
 from maplib import LatLon
 
 class MCWebServer:
@@ -37,6 +40,7 @@ class MCWebServer:
         self.app.add_url_rule("/api/info", view_func=self.route_info)
         self.app.add_url_rule("/api/action/moveto", view_func=self.route_action_moveto)
         self.app.add_url_rule("/api/action/search", view_func=self.route_action_search)
+        self.app.add_url_rule("/api/setup/run_clustering", methods=["POST"], view_func=self.route_run_clustering)
         self.app.after_request(self.add_headers)
 
     def route_index(self):
@@ -49,7 +53,7 @@ class MCWebServer:
         
         return ret
     
-    def route_action_moveto(self) -> Dict[int, str]:
+    def route_action_moveto(self) -> Tuple[Dict, int]:
         drone_id = request.args.get("drone_id", type=int, default=None)
         lat = request.args.get("lat", type=float, default=None)
         lon = request.args.get("lon", type=float, default=None)
@@ -66,7 +70,7 @@ class MCWebServer:
         
         return {}, 200
     
-    def route_action_search(self) -> Dict[int, str]:
+    def route_action_search(self) -> Tuple[Dict, int]:
         drone_id = request.args.get("drone_id", type=int, default=None)
         lat = request.args.get("lat", type=float, default=None)
         lon = request.args.get("lon", type=float, default=None)
@@ -82,6 +86,12 @@ class MCWebServer:
         self.commands.put_nowait(command_tup)
         
         return {}, 200
+
+    def route_run_clustering(self):
+        data = request.form.to_dict()
+        hotspots_location = data.get("hotspots_position", None)
+        cluster_centres = run_clustering(json.loads(hotspots_location))
+        return cluster_centres
     
     def add_headers(self, response: Response):
         response.headers.add("Content-Type", "application/json")

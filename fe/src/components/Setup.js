@@ -61,9 +61,9 @@ function Setup() {
 
   async function runClustering() {
     const hotspots_position = hotspots.map((hotspot) => ({
-        lat: hotspot.position.lat,
-        lng: hotspot.position.lng,
-      }));
+      lat: hotspot.position.lat,
+      lng: hotspot.position.lng,
+    }));
 
     try {
       const params = new URLSearchParams();
@@ -74,6 +74,13 @@ function Setup() {
         method: 'POST',
         body: params,
       });
+      if (response.ok) {
+        const responseData = await response.json();
+        // Process responseData as needed
+        console.log('Response:', responseData);
+      } else {
+        console.error('Error:', response.status, response.statusText);
+      }
 
     } catch (error) {
       console.error('Error:', error);

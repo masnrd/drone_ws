@@ -1,4 +1,4 @@
-from interface import ClusterFinder
+from .interface import ClusterFinder
 
 # DBScan ClusterFinder
 

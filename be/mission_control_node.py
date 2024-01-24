@@ -13,6 +13,7 @@ logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 COMMAND_CHECK_INTERVAL = 1
 HOME_POSITION = LatLon(1.3399775009363866, 103.96258672159254)
 
+
 class MCNode:
     def __init__(self, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
         self.logger = logging.getLogger("mission_control")
@@ -52,7 +53,8 @@ class MCNode:
         """ MC sends a Command to a given drone """
         self.drone_sys.add_command(drone_id, drone_cmd)
 
-def main(args=None):
+
+def main():
     drone_states = {
         DroneId(69): DroneState(69),
         DroneId(1): DroneState(1),
@@ -86,7 +88,6 @@ def main(args=None):
     finally:
         drone_sys.exit.set()
 
-    
 
 if __name__ == '__main__':
     main()
