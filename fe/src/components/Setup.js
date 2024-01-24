@@ -16,8 +16,10 @@ function AddMarkerOnClick({onNewPoint}) {
 }
 
 function Setup() {
-  const [markers, setMarkers] = useState([]);
   const center = [1.3399775009363866, 103.96258672159254];
+
+  const [markers, setMarkers] = useState([]);
+  const [numberOfDrones, setNumberOfDrones] = useState(0);
 
   const HotspotIcon = () => (
     <SvgIcon style={{fontSize: '30px'}} viewBox="0 0 24 24">
@@ -50,9 +52,54 @@ function Setup() {
     setMarkers(markers.filter((_, markerIndex) => markerIndex !== index));
   };
 
+  const handleDronesInputChange = (event) => {
+    const value = Math.max(1, Math.min(5, Number(event.target.value)));
+    setNumberOfDrones(value);
+  };
+
+  async function runClustering() {
+  const data = {
+    numberOfDrones,
+    markers,
+  };
+
+  try {
+    const response = await fetch('https://your-backend-endpoint.com/api/data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (response.ok) {
+      console.log("Data sent successfully");
+    } else {
+      console.log("Error sending data");
+    }
+  } catch (error) {
+    console.error("Error in sending data: ", error);
+  }
+}
+
   return (
     <div style={{display: 'flex', height: '100vh'}}>
       <div style={{width: '300px', borderRight: '1px solid black', padding: '10px'}}>
+        <h4>Setup</h4>
+        <div>
+          <label>
+            Number of Drones:
+            <input
+              type="number"
+              value={numberOfDrones}
+              onChange={handleDronesInputChange}
+              min="1"
+              max="5"
+              style={{ marginLeft: '10px' }}
+            />
+          </label>
+        </div>
+
         <h4>Selected Hotspots</h4>
         <ol>
           {markers.map((marker, index) => (
@@ -64,6 +111,8 @@ function Setup() {
             </li>
           ))}
         </ol>
+
+        <button onClick={runClustering}>Run Clustering</button>
       </div>
       <MapContainer center={center} zoom={13} style={{flex: 1}}>
         <TileLayer
