@@ -152,6 +152,17 @@ function Setup() {
         </ol>
 
         <button onClick={runClustering}>Run Clustering</button>
+
+        <h4>Cluster Results</h4>
+        <ol>
+          {clusters.map((cluster, index) => (
+            <li key={index}>
+              {`Coor: (${cluster.position.lat.toFixed(3)}, ${cluster.position.lng.toFixed(3)})`}
+              <br />
+              {`Radius: ${clusterRadii[index].toFixed(2)}m`}
+            </li>
+          ))}
+        </ol>
       </div>
       <MapContainer center={center} zoom={13} style={{flex: 1}}>
         <TileLayer
