@@ -2,14 +2,14 @@ import { Route, Routes } from "react-router-dom";
 
 import "./App.css";
 import Map from "./components/Map.js";
-import Config from "./components/Config.js";
+import Setup from "./components/Setup.js";
 
 const App = () => {
   return (
     <div>
       <Routes>
         <Route path="/" element={<Map />} />
-        <Route path="/config" element={<Config />} />
+        <Route path="/setup" element={<Setup />} />
       </Routes>
     </div>
   );
