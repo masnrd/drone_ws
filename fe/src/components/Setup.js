@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {MapContainer, TileLayer, Marker, Popup, useMapEvents} from 'react-leaflet';
+import {MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents} from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import SvgIcon from '@mui/material/SvgIcon';
 import L from 'leaflet';
@@ -21,7 +21,9 @@ function Setup() {
   const [hotspots, setHotspots] = useState([]);
   const [numberOfDrones, setNumberOfDrones] = useState(1);
 
-  const [response, setResponse] = useState(null);
+  const [clusters, setClusters] = useState([]);
+  const [clusterRadii, setClusterRadii] = useState([]);
+
 
   const HotspotIcon = () => (
     <SvgIcon style={{fontSize: '30px'}} viewBox="0 0 24 24">
@@ -30,10 +32,30 @@ function Setup() {
         <path
           d="M8.6 3.2a1 1 0 0 0-1.6 1 3.5 3.5 0 0 1-.8 3.6c-.6.8-4 5.6-1 10.7A7.7 7.7 0 0 0 12 22a8 8 0 0 0 7-3.8 7.8 7.8 0 0 0 .6-6.5 8.7 8.7 0 0 0-2.6-4 1 1 0 0 0-1.6.7 10 10 0 0 1-.8 3.4 9.9 9.9 0 0 0-2.2-5.5A14.4 14.4 0 0 0 9 3.5l-.4-.3Z"/>
       </svg>
-
     </SvgIcon>
   )
-  const createIcon = () => {
+  const ClusterIcon = () => (
+    <SvgIcon style={{fontSize: '30px'}} viewBox="0 0 24 24">
+      <svg className="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
+           fill="blue" viewBox="0 0 24 24">
+        <path stroke="blue" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+        <path stroke="blue" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17.8 14h0a7 7 0 1 0-11.5 0h0l.1.3.3.3L12 21l5.1-6.2.6-.7.1-.2Z"/>
+      </svg>
+    </SvgIcon>
+  );
+
+  const createClusterIcon = () => {
+    const iconHtml = ReactDOMServer.renderToString(<ClusterIcon/>);
+    return L.divIcon({
+      html: iconHtml,
+      className: 'custom-leaflet-cluster-icon',
+      iconSize: [60, 60],
+      iconAnchor: [30, 60],
+    });
+  };
+  const createHotSpotIcon = () => {
     const iconHtml = ReactDOMServer.renderToString(<HotspotIcon/>);
     return L.divIcon({
       html: iconHtml,
@@ -47,7 +69,7 @@ function Setup() {
     if (hotspots.length >= 20) {
       setHotspots(hotspots.slice(1));
     }
-    setHotspots(prevHotspots => [...prevHotspots, {position: latlng, icon: createIcon()}]);
+    setHotspots(prevHotspots => [...prevHotspots, {position: latlng, icon: createHotSpotIcon()}]);
   };
 
   const removeHotspot = (index) => {
@@ -76,8 +98,20 @@ function Setup() {
       });
       if (response.ok) {
         const responseData = await response.json();
-        // Process responseData as needed
-        console.log('Response:', responseData);
+        const clusterData = Object.values(responseData).map(cluster => ({
+          position: {
+            lat: cluster[0][0],
+            lng: cluster[0][1]
+          },
+          icon: createClusterIcon()
+        }));
+        const radiiData = Object.values(responseData).map(cluster => cluster[1]);
+
+        setClusters(clusterData);
+        setClusterRadii(radiiData);
+        console.log(responseData)
+        console.log(clusterData)
+        console.log(radiiData)
       } else {
         console.error('Error:', response.status, response.statusText);
       }
@@ -134,6 +168,29 @@ function Setup() {
               {`Latitude: ${hotspot.position.lat}, Longitude: ${hotspot.position.lng}`}
             </Popup>
           </Marker>
+        ))}
+
+        {clusters.map((cluster, index) => (
+          cluster.position && (
+            <>
+              <Marker
+                key={`marker-${index}`}
+                position={cluster.position}
+                icon={cluster.icon}>
+                <Popup>
+                  {`Latitude: ${cluster.position.lat}, Longitude: ${cluster.position.lng}`}
+                </Popup>
+              </Marker>
+              <Circle
+                key={`circle-${index}`}
+                center={cluster.position}
+                radius={clusterRadii[index]} // Use the radius from clusterRadii
+                color="blue"
+                fillColor="blue"
+                fillOpacity={0.2}
+              />
+            </>
+          )
         ))}
       </MapContainer>
     </div>
