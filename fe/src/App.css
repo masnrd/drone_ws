@@ -3,3 +3,9 @@
   height: 100vh;
   z-index: 1;
 }
+
+.custom .leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: none;
+  color: none;
+}
