@@ -5,7 +5,7 @@ import SvgIcon from '@mui/material/SvgIcon';
 import L from 'leaflet';
 import ReactDOMServer from 'react-dom/server';
 
-function AddMarkerOnClick({onNewPoint}) {
+function AddHotspotOnClick({onNewPoint}) {
   useMapEvents({
     click(e) {
       onNewPoint(e.latlng);
@@ -18,8 +18,10 @@ function AddMarkerOnClick({onNewPoint}) {
 function Setup() {
   const center = [1.3399775009363866, 103.96258672159254];
 
-  const [markers, setMarkers] = useState([]);
-  const [numberOfDrones, setNumberOfDrones] = useState(0);
+  const [hotspots, setHotspots] = useState([]);
+  const [numberOfDrones, setNumberOfDrones] = useState(1);
+
+  const [response, setResponse] = useState(null);
 
   const HotspotIcon = () => (
     <SvgIcon style={{fontSize: '30px'}} viewBox="0 0 24 24">
@@ -41,15 +43,15 @@ function Setup() {
     });
   };
 
-  const addMarker = (latlng) => {
-    if (markers.length >= 20) {
-      setMarkers(markers.slice(1));
+  const addHotspot = (latlng) => {
+    if (hotspots.length >= 20) {
+      setHotspots(hotspots.slice(1));
     }
-    setMarkers(prevMarkers => [...prevMarkers, {position: latlng, icon: createIcon()}]);
+    setHotspots(prevHotspots => [...prevHotspots, {position: latlng, icon: createIcon()}]);
   };
 
-  const removeMarker = (index) => {
-    setMarkers(markers.filter((_, markerIndex) => markerIndex !== index));
+  const removeHotspot = (index) => {
+    setHotspots(hotspots.filter((_, hotspotIndex) => hotspotIndex !== index));
   };
 
   const handleDronesInputChange = (event) => {
@@ -58,29 +60,25 @@ function Setup() {
   };
 
   async function runClustering() {
-  const data = {
-    numberOfDrones,
-    markers,
-  };
+    const hotspots_position = hotspots.map((hotspot) => ({
+        lat: hotspot.position.lat,
+        lng: hotspot.position.lng,
+      }));
 
-  try {
-    const response = await fetch('https://your-backend-endpoint.com/api/data', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
+    try {
+      const params = new URLSearchParams();
+      params.append('numberOfDrones', numberOfDrones);
+      params.append('hotspots_position', JSON.stringify(hotspots_position));
 
-    if (response.ok) {
-      console.log("Data sent successfully");
-    } else {
-      console.log("Error sending data");
+      const response = await fetch('http://localhost:5000/api/setup/run_clustering', {
+        method: 'POST',
+        body: params,
+      });
+
+    } catch (error) {
+      console.error('Error:', error);
     }
-  } catch (error) {
-    console.error("Error in sending data: ", error);
   }
-}
 
   return (
     <div style={{display: 'flex', height: '100vh'}}>
@@ -95,17 +93,17 @@ function Setup() {
               onChange={handleDronesInputChange}
               min="1"
               max="5"
-              style={{ marginLeft: '10px' }}
+              style={{marginLeft: '10px'}}
             />
           </label>
         </div>
 
         <h4>Selected Hotspots</h4>
         <ol>
-          {markers.map((marker, index) => (
+          {hotspots.map((hotspot, index) => (
             <li key={index}>
-              {`Lat: ${marker.position.lat.toFixed(3)}, Lon: ${marker.position.lng.toFixed(3)}`}
-              <button onClick={() => removeMarker(index)} style={{marginLeft: '10px'}}>
+              {`Lat: ${hotspot.position.lat.toFixed(3)}, Lon: ${hotspot.position.lng.toFixed(3)}`}
+              <button onClick={() => removeHotspot(index)} style={{marginLeft: '10px'}}>
                 X
               </button>
             </li>
@@ -119,14 +117,14 @@ function Setup() {
           attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <AddMarkerOnClick onNewPoint={addMarker}/>
-        {markers.map((marker, index) => (
+        <AddHotspotOnClick onNewPoint={addHotspot}/>
+        {hotspots.map((hotspot, index) => (
           <Marker
             key={index}
-            position={marker.position}
-            icon={marker.icon}>
+            position={hotspot.position}
+            icon={hotspot.icon}>
             <Popup>
-              {`Latitude: ${marker.position.lat}, Longitude: ${marker.position.lng}`}
+              {`Latitude: ${hotspot.position.lat}, Longitude: ${hotspot.position.lng}`}
             </Popup>
           </Marker>
         ))}
