@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents} from 'react-leaflet';
+import {Circle, MapContainer, Marker, Popup, TileLayer, useMapEvents} from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import SvgIcon from '@mui/material/SvgIcon';
 import L from 'leaflet';
@@ -64,6 +64,26 @@ function Setup() {
       iconAnchor: [15, 30],
     });
   };
+
+  function createNumberIcon(number) {
+    return L.divIcon({
+      className: 'my-custom-icon',
+      html: `<div style="background-color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; justify-content: center; align-items: center; font-size: 12px; border: 1px solid black;">${number}</div>`,
+      iconSize: [25, 25],
+      iconAnchor: [12, 12]
+    });
+  }
+
+  function getNewPosition(lat, lon, distanceInMeters) {
+    const EarthRadius = 6378137;
+    const dLat = distanceInMeters / EarthRadius;
+    const dLatDegrees = dLat * (180 / Math.PI);
+
+    return {
+      lat: lat + dLatDegrees,
+      lon: lon
+    };
+  }
 
   const addHotspot = (latlng) => {
     if (hotspots.length >= 20) {
@@ -158,7 +178,7 @@ function Setup() {
           {clusters.map((cluster, index) => (
             <li key={index}>
               {`Coor: (${cluster.position.lat.toFixed(3)}, ${cluster.position.lng.toFixed(3)})`}
-              <br />
+              <br/>
               {`Radius: ${clusterRadii[index].toFixed(2)}m`}
             </li>
           ))}
@@ -195,10 +215,16 @@ function Setup() {
               <Circle
                 key={`circle-${index}`}
                 center={cluster.position}
-                radius={clusterRadii[index]} // Use the radius from clusterRadii
+                radius={clusterRadii[index]}
                 color="blue"
                 fillColor="blue"
                 fillOpacity={0.2}
+              />
+              <Marker
+                key={`number-${index}`}
+                position={getNewPosition(cluster.position.lat, cluster.position.lng, 20)}
+                icon={createNumberIcon(index)}
+                zIndexOffset={1000}
               />
             </>
           )
