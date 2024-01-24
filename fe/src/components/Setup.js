@@ -17,9 +17,9 @@ function AddMarkerOnClick({onNewPoint}) {
 
 function Setup() {
   const [markers, setMarkers] = useState([]);
-  const center = [51.505, -0.09]; // Set your initial map center coordinates
+  const center = [1.3399775009363866, 103.96258672159254];
 
-  const CustomIcon = () => (
+  const HotspotIcon = () => (
     <SvgIcon style={{fontSize: '30px'}} viewBox="0 0 24 24">
       <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
            fill="red" viewBox="0 0 24 24">
@@ -28,32 +28,42 @@ function Setup() {
       </svg>
 
     </SvgIcon>
-  );
-
-// Function to create a custom Leaflet icon
+  )
   const createIcon = () => {
-    const iconHtml = ReactDOMServer.renderToString(<CustomIcon/>);
+    const iconHtml = ReactDOMServer.renderToString(<HotspotIcon/>);
     return L.divIcon({
       html: iconHtml,
       className: 'custom-leaflet-icon',
-      iconSize: [30, 30], // Adjust size as needed
-      iconAnchor: [15, 30], // Adjust anchor point as needed
+      iconSize: [30, 30],
+      iconAnchor: [15, 30],
     });
   };
 
   const addMarker = (latlng) => {
-    setMarkers([...markers, {position: latlng, icon: createIcon()}]);
+    if (markers.length >= 20) {
+      setMarkers(markers.slice(1));
+    }
+    setMarkers(prevMarkers => [...prevMarkers, {position: latlng, icon: createIcon()}]);
+  };
+
+  const removeMarker = (index) => {
+    setMarkers(markers.filter((_, markerIndex) => markerIndex !== index));
   };
 
   return (
     <div style={{display: 'flex', height: '100vh'}}>
       <div style={{width: '300px', borderRight: '1px solid black', padding: '10px'}}>
-        <h4>Clicked Points</h4>
-        <ul>
+        <h4>Selected Hotspots</h4>
+        <ol>
           {markers.map((marker, index) => (
-            <li key={index}>{`Latitude: ${marker.position.lat}, Longitude: ${marker.position.lng}`}</li>
+            <li key={index}>
+              {`Lat: ${marker.position.lat.toFixed(3)}, Lon: ${marker.position.lng.toFixed(3)}`}
+              <button onClick={() => removeMarker(index)} style={{marginLeft: '10px'}}>
+                X
+              </button>
+            </li>
           ))}
-        </ul>
+        </ol>
       </div>
       <MapContainer center={center} zoom={13} style={{flex: 1}}>
         <TileLayer
