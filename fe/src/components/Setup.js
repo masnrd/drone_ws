@@ -143,7 +143,8 @@ function Setup() {
 
   return (
     <div style={{display: 'flex', height: '100vh'}}>
-      <div style={{width: '300px', borderRight: '1px solid black', padding: '10px'}}>
+      <div
+        style={{width: '300px', borderRight: '1px solid black', padding: '10px', height: '100vh', overflowY: 'auto'}}>
         <h4>Setup</h4>
         <div>
           <label>
