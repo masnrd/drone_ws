@@ -16,6 +16,8 @@ function AddHotspotOnClick({onNewPoint}) {
 }
 
 function Setup() {
+  const [activeTab, setActiveTab] = useState('setup');
+
   const center = [1.3399775009363866, 103.96258672159254];
 
   const [hotspots, setHotspots] = useState([]);
@@ -132,6 +134,8 @@ function Setup() {
         setClusterRadii(radiiData);
         console.log(responseData)
         console.log(clusterData)
+
+        setActiveTab('resultsAndAssignments');
       } else {
         console.error('Error:', response.status, response.statusText);
       }
@@ -162,65 +166,77 @@ function Setup() {
     <div style={{display: 'flex', height: '100vh'}}>
       <div
         style={{width: '300px', borderRight: '1px solid black', padding: '10px', height: '100vh', overflowY: 'auto'}}>
-        <h3>Setup</h3>
         <div>
-          <label>
-            Number of Drones:
-            <input
-              type="number"
-              value={numberOfDrones}
-              onChange={handleDronesInputChange}
-              min="1"
-              max="5"
-              style={{marginLeft: '10px'}}
-            />
-          </label>
+          <button onClick={() => setActiveTab('setupAndHotspots')}>Config</button>
+          <button onClick={() => setActiveTab('resultsAndAssignments')}>Assignment</button>
         </div>
 
-        <h3>Selected Hotspots</h3>
-        <ol>
-          {hotspots.map((hotspot, index) => (
-            <li key={index}>
-              {`Lat: ${hotspot.position.lat.toFixed(3)}, Lon: ${hotspot.position.lng.toFixed(3)}`}
-              <button onClick={() => removeHotspot(index)} style={{marginLeft: '10px'}}>
-                X
-              </button>
-            </li>
-          ))}
-        </ol>
+        {activeTab === 'setupAndHotspots' && (
+          <div>
+            <h3>Setup</h3>
+            <div>
+              <label>
+                Number of Drones:
+                <input
+                  type="number"
+                  value={numberOfDrones}
+                  onChange={handleDronesInputChange}
+                  min="1"
+                  max="5"
+                  style={{marginLeft: '10px'}}
+                />
+              </label>
+            </div>
 
-        <button onClick={runClustering}>Run Clustering</button>
+            <h3>Selected Hotspots</h3>
+            <ol>
+              {hotspots.map((hotspot, index) => (
+                <li key={index}>
+                  {`Lat: ${hotspot.position.lat.toFixed(3)}, Lon: ${hotspot.position.lng.toFixed(3)}`}
+                  <button onClick={() => removeHotspot(index)} style={{marginLeft: '10px'}}>
+                    X
+                  </button>
+                </li>
+              ))}
+            </ol>
 
-        <h3>Cluster Results</h3>
-        <ol>
-          {clusters.map((cluster, index) => (
-            <li key={index}>
-              {`Coor: (${cluster.position.lat.toFixed(3)}, ${cluster.position.lng.toFixed(3)})`}
-              <br/>
-              {`Radius: ${clusterRadii[index].toFixed(2)}m`}
-            </li>
-          ))}
-        </ol>
+            <button onClick={runClustering}>Run Clustering</button>
+          </div>
+        )}
 
-        <button onClick={assignDronesToClusters}>Assign Drones</button>
-        <h3>Drone Assignments</h3>
-        <table style={{borderCollapse: 'collapse', width: '100%'}}>
-          <thead>
-          <tr>
-            <th style={{border: '1px solid black', padding: '8px'}}>Drone ID</th>
-            <th style={{border: '1px solid black', padding: '8px'}}>Assigned Clusters</th>
-          </tr>
-          </thead>
-          <tbody>
-          {assignments.map((assignment, index) => (
-            <tr key={index}>
-              <td style={{border: '1px solid black', padding: '8px'}}>{`Drone ${assignment.drone}`}</td>
-              <td style={{border: '1px solid black', padding: '8px'}}>{assignment.clusters}</td>
-            </tr>
-          ))}
-          </tbody>
-        </table>
+        {activeTab === 'resultsAndAssignments' && (
+          <div>
+            <h3>Cluster Results</h3>
+            <ol>
+              {clusters.map((cluster, index) => (
+                <li key={index}>
+                  {`Coor: (${cluster.position.lat.toFixed(3)}, ${cluster.position.lng.toFixed(3)})`}
+                  <br/>
+                  {`Radius: ${clusterRadii[index].toFixed(2)}m`}
+                </li>
+              ))}
+            </ol>
 
+            <h3>Drone Assignments</h3>
+            <table style={{borderCollapse: 'collapse', width: '100%'}}>
+              <thead>
+              <tr>
+                <th style={{border: '1px solid black', padding: '8px'}}>Drone ID</th>
+                <th style={{border: '1px solid black', padding: '8px'}}>Assigned Clusters</th>
+              </tr>
+              </thead>
+              <tbody>
+              {assignments.map((assignment, index) => (
+                <tr key={index}>
+                  <td style={{border: '1px solid black', padding: '8px'}}>{`Drone ${assignment.drone}`}</td>
+                  <td style={{border: '1px solid black', padding: '8px'}}>{assignment.clusters}</td>
+                </tr>
+              ))}
+              </tbody>
+            </table>
+            <button onClick={assignDronesToClusters}>Assign Drones</button>
+          </div>
+        )}
       </div>
       <MapContainer center={center} zoom={13} style={{flex: 1}}>
         <TileLayer
