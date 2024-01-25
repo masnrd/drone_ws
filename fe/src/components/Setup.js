@@ -131,7 +131,6 @@ function Setup() {
         setClusterRadii(radiiData);
         console.log(responseData)
         console.log(clusterData)
-        console.log(radiiData)
       } else {
         console.error('Error:', response.status, response.statusText);
       }

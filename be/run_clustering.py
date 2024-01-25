@@ -22,9 +22,11 @@ def run_clustering(hotspots_location: List[Dict]):
     # Find cluster centers
     all_centres = dict()
 
-    for cluster_id, cluster in cluster_results.items():
+    idx = 0
+    for _, cluster in cluster_results.items():
         centre, max_distance = find_search_centre(cluster)
-        all_centres[cluster_id] = [centre, max_distance]
+        all_centres[idx] = [centre, max_distance, len(cluster)]
+        idx += 1
 
     return all_centres
 
