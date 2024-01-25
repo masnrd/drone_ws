@@ -161,14 +161,46 @@ function Setup() {
     setAssignments(newAssignments);
   };
 
+  const buttonStyle = {
+  display: 'block',
+  width: '100%',
+  padding: '10px',
+  border: 'none',
+  borderBottom: '2px solid #007BFF',
+  background: '#FFFFFF',
+  color: '#007BFF',
+  cursor: 'pointer',
+  fontSize: '16px',
+  outline: 'none',
+};
+
+const activeButtonStyle = {
+  ...buttonStyle,
+  background: '#007BFF',
+  color: '#FFFFFF',
+  borderBottom: '2px solid #0056b3',
+  borderTopRightRadius: '5px',
+  borderTopLeftRadius: '5px',
+};
+
 
   return (
     <div style={{display: 'flex', height: '100vh'}}>
       <div
         style={{width: '300px', borderRight: '1px solid black', padding: '10px', height: '100vh', overflowY: 'auto'}}>
         <div>
-          <button onClick={() => setActiveTab('setupAndHotspots')}>Config</button>
-          <button onClick={() => setActiveTab('resultsAndAssignments')}>Assignment</button>
+          <button
+            onClick={() => setActiveTab('setupAndHotspots')}
+            style={activeTab === 'setupAndHotspots' ? activeButtonStyle : buttonStyle}
+          >
+            Config
+          </button>
+          <button
+            onClick={() => setActiveTab('resultsAndAssignments')}
+            style={activeTab === 'resultsAndAssignments' ? activeButtonStyle : buttonStyle}
+          >
+            Assignment
+          </button>
         </div>
 
         {activeTab === 'setupAndHotspots' && (
