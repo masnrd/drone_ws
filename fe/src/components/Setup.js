@@ -24,6 +24,7 @@ function Setup() {
   const [clusters, setClusters] = useState([]);
   const [clusterRadii, setClusterRadii] = useState([]);
 
+  const [assignments, setAssignments] = useState([]);
 
   const HotspotIcon = () => (
     <SvgIcon style={{fontSize: '30px'}} viewBox="0 0 24 24">
@@ -140,11 +141,28 @@ function Setup() {
     }
   }
 
+  const assignDronesToClusters = () => {
+    let tempAssignments = Array.from({length: numberOfDrones}, () => []);
+
+    clusters.forEach((_, index) => {
+      let droneIndex = index % numberOfDrones;
+      tempAssignments[droneIndex].push(index + 1);
+    });
+
+    let newAssignments = tempAssignments.map((clusterIds, index) => ({
+      drone: index + 1,
+      clusters: clusterIds.join(', ')
+    }));
+
+    setAssignments(newAssignments);
+  };
+
+
   return (
     <div style={{display: 'flex', height: '100vh'}}>
       <div
         style={{width: '300px', borderRight: '1px solid black', padding: '10px', height: '100vh', overflowY: 'auto'}}>
-        <h4>Setup</h4>
+        <h3>Setup</h3>
         <div>
           <label>
             Number of Drones:
@@ -159,7 +177,7 @@ function Setup() {
           </label>
         </div>
 
-        <h4>Selected Hotspots</h4>
+        <h3>Selected Hotspots</h3>
         <ol>
           {hotspots.map((hotspot, index) => (
             <li key={index}>
@@ -173,7 +191,7 @@ function Setup() {
 
         <button onClick={runClustering}>Run Clustering</button>
 
-        <h4>Cluster Results</h4>
+        <h3>Cluster Results</h3>
         <ol>
           {clusters.map((cluster, index) => (
             <li key={index}>
@@ -183,6 +201,26 @@ function Setup() {
             </li>
           ))}
         </ol>
+
+        <button onClick={assignDronesToClusters}>Assign Drones</button>
+        <h3>Drone Assignments</h3>
+        <table style={{borderCollapse: 'collapse', width: '100%'}}>
+          <thead>
+          <tr>
+            <th style={{border: '1px solid black', padding: '8px'}}>Drone ID</th>
+            <th style={{border: '1px solid black', padding: '8px'}}>Assigned Clusters</th>
+          </tr>
+          </thead>
+          <tbody>
+          {assignments.map((assignment, index) => (
+            <tr key={index}>
+              <td style={{border: '1px solid black', padding: '8px'}}>{`Drone ${assignment.drone}`}</td>
+              <td style={{border: '1px solid black', padding: '8px'}}>{assignment.clusters}</td>
+            </tr>
+          ))}
+          </tbody>
+        </table>
+
       </div>
       <MapContainer center={center} zoom={13} style={{flex: 1}}>
         <TileLayer
@@ -223,7 +261,7 @@ function Setup() {
               <Marker
                 key={`number-${index}`}
                 position={getNewPosition(cluster.position.lat, cluster.position.lng, 20)}
-                icon={createNumberIcon(index)}
+                icon={createNumberIcon(index + 1)}
                 zIndexOffset={1000}
               />
             </>
