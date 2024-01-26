@@ -64,7 +64,7 @@ For each drone with ID `droneId` to be initialised, start a new terminal.
     export PX4_HOME_LON=[longitude]
     ```
 
-In the `drone_ws` workspace, having done the necessary `source` commands, initialise the PX4 SITL stack with the Gazebo simulator:
+In the `PX4_Autopilot` workspace, having run `make px4_sitl`, initialise the PX4 SITL stack with the Gazebo simulator:
 ```bash
 PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 ./build/px4_sitl_default/bin/px4 -i [droneId]
 ```

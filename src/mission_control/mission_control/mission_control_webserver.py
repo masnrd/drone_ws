@@ -35,6 +35,9 @@ class MCWebServer:
         self.app.add_url_rule("/api/info", view_func=self.route_info)
         self.app.add_url_rule("/api/action/search", view_func=self.route_action_search)
 
+    def drone_exists(self, drone_id: DroneId):
+        return drone_id in self.drone_states.keys()
+
     def route_index(self):
         return send_from_directory(self.static_dir, "index.html")
 
@@ -52,6 +55,9 @@ class MCWebServer:
 
         if drone_id is None:
             return {"error": "need drone_id"}, 400
+        
+        if not self.drone_exists(drone_id):
+            return {"error": f"no such drone with drone_id {drone_id}"}, 400
 
         if lat is None or lon is None:
             return {"error": "need latitude/longitude parameters as float"}, 400
