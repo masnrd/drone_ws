@@ -16,7 +16,7 @@ function AddHotspotOnClick({onNewPoint}) {
 }
 
 function Setup() {
-  const [activeTab, setActiveTab] = useState('setup');
+  const [activeTab, setActiveTab] = useState('setupAndHotspots');
 
   const center = [1.3399775009363866, 103.96258672159254];
 
@@ -93,6 +93,7 @@ function Setup() {
       setHotspots(hotspots.slice(1));
     }
     setHotspots(prevHotspots => [...prevHotspots, {position: latlng, icon: createHotSpotIcon()}]);
+    setActiveTab('setupAndHotspots');
   };
 
   const removeHotspot = (index) => {
