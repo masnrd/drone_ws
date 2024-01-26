@@ -9,7 +9,7 @@ from rclpy.task import Future
 from rclpy.exceptions import ParameterUninitializedException
 from .maplib import LatLon
 from .pathfinder import PathfinderState
-from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode, VehicleStatus
+from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode, VehicleStatus, BatteryStatus
 from mc_interface_msgs.msg import Ready
 from mc_interface_msgs.srv import Command, Status
 
@@ -78,6 +78,7 @@ class DroneNode(Node):
     - Subscriptions:
         - `sub_vehglobpos`
         - `sub_vehcmdack`
+        - `sub_batstatus`
     - Publishers:
         - `pub_trajsp`
         - `pub_vehcom`
@@ -112,6 +113,8 @@ class DroneNode(Node):
             depth=1
         )
         self.drone_state = DroneMode.INIT
+        self.battery_percentage = -1
+        self.battery_secondsleft = 0
         self.next_state = None   # Used to differentiate between a MOVE_TO command and SEARCH_SECTOR command.
         self.drone_id = drone_id if drone_id is not None else DEFAULT_DRONE_ID
         self.log("Initialised.")
@@ -139,6 +142,12 @@ class DroneNode(Node):
             VehicleControlMode,
             f"{self._drone_ns}/fmu/out/vehicle_control_mode",
             self.fc_recv_vehconmode,
+            self.qos_profile,
+        )
+        self.sub_batstatus = self.create_subscription(
+            BatteryStatus,
+            f"{self._drone_ns}/fmu/out/battery_status",
+            self.fc_recv_batstatus,
             self.qos_profile,
         )
         self.pub_vehcom = self.create_publisher(
@@ -449,6 +458,10 @@ class DroneNode(Node):
             if not msg.flag_armed or not msg.flag_control_offboard_enabled:
                 # Drone was disarmed
                 self.change_state(DroneMode.INIT_FC, "Drone disconnected from FC, reconnecting.")
+                
+    def fc_recv_batstatus(self, msg: BatteryStatus):
+        self.battery_percentage = msg.remaining
+        self.battery_secondsleft = msg.time_remaining_s
 
     def _fc_recv_locpos(self, msg: VehicleLocalPosition):
         """
@@ -500,6 +513,8 @@ class DroneNode(Node):
         msg.drone_id, msg.drone_mode = self.drone_id, self.drone_state
         msg.timestamp = self.clock_microseconds()
         msg.last_rtt = self.mc_last_rtt
+        msg.battery_percentage = self.battery_percentage
+        msg.battery_secondsleft = self.battery_secondsleft
         if self.cur_latlon is None:
             msg.lat, msg.lon = float('nan'), float('nan')
         else:
