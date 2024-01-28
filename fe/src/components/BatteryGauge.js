@@ -4,7 +4,7 @@ import GaugeBg from "../assets/gauge-bg.png";
 
 const gaugeWidth = 60;
 const gaugeHeight = 30;
-const gaugeContentWidth = gaugeWidth - 10;
+const gaugeContentWidth = gaugeWidth - 15;
 const gaugeBarsNb = 3;
 const gaugeBarWidth = gaugeContentWidth / gaugeBarsNb;
 const gaugeBarMargin = 2;
