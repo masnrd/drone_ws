@@ -1,12 +1,15 @@
 import "./App.css";
+import { Route, Routes } from "react-router-dom";
 import Map from "./components/Map.js";
 
-function App() {
+const App = () => {
   return (
-    <>
-      <Map />
-    </>
+    <div>
+      <Routes>
+        <Route path="/" element={<Map />} />
+      </Routes>
+    </div>
   );
-}
+};
 
 export default App;
