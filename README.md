@@ -26,6 +26,20 @@ Assuming you have built the project before (under Installation), you can simply 
 - Test Drone node: `make test_drone`
 - Test Mission Control node: `make test_mc`
 
+For simulation, you will need the following repositories:
+- PX4-Autopilot
+- MicroXRCEAgent
+- [PX4-gazebo-models](https://github.com/PX4/PX4-gazebo-models)
+
+Perform the necessary setup.
+
+In the `PX4-gazebo-models` repository, install the default worlds and models:
+```bash
+python3 simulation-gazebo
+```
+
+Next, back in this repository, follow the instructions in [here](./worlds/README.md) to install the custom worlds used for simulation.
+
 ## Usage
 ### Initialising the Environment
 If the ROS2 distribution hasn't been initialised before, do so:
@@ -41,11 +55,18 @@ source install/local_setup.bash
 - This is an overlay on top of the underlying ROS2 environment (having sourced `setup.bash` for the ROS2 distribution earlier)
 
 ### SITL Testing
-First, initialise the micro XRCE-DDS agent and generate the necessary simulation files (within the `PX4-Autopilot` directory):
+#### Micro XRCE-DDS Agent
+This is needed to ensure communication works.
 ```bash
 MicroXRCEAgent udp4 -p 8888
-make px4_sitl
 ```
+
+#### Gazebo Initialisation
+Start the Gazebo simulation and server:
+```bash
+python simulation-gazebo --world [custom world]
+```
+- Currently, we only have the `schfield` option as the custom world, though the default empty world (`default`) is present.
 
 #### Mission Control Initialisation
 For each drone you wish to initialise, add a new entry in the `drone_states` dictionary in line 96 of `mission_control_node`, and run `build_mc` within the `drone_ws` workspace.
@@ -63,14 +84,23 @@ For each drone with ID `droneId` to be initialised, start a new terminal.
     export PX4_HOME_LAT=[latitude]
     export PX4_HOME_LON=[longitude]
     ```
+	
+##### Flight Controller
+We first need to start the PX4 flight controller simulation. This should be done in the `PX4_Autopilot` workspace.
 
-In the `PX4_Autopilot` workspace, having run `make px4_sitl`, initialise the PX4 SITL stack with the Gazebo simulator:
+Generate the PX4 SITL stack if it's not already done so. This only needs to be done once:
+```bash
+make px4_sitl
+```
+
+Initialise a single instance of the SITL stack.
 ```bash
 PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 ./build/px4_sitl_default/bin/px4 -i [droneId]
 ```
-- This will run the Gazebo simulator with a drone if it's not open yet. Otherwise, it will initialise a new drone on the simulator.
 
-Then, initialise the drone ROS2 node on another terminal.
+##### ROS2 Node
+
+Initialise the drone ROS2 node on another terminal.
 ```bash
 ros2 run drone drone_node --ros-args -p droneId:=[droneId]
 ```
