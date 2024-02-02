@@ -1,5 +1,5 @@
 <sdf version='1.10'>
-  <world name='schfield'>
+  <world name='SUTD_field'>
     <physics type="ode">
       <max_step_size>0.004</max_step_size>
       <real_time_factor>1.0</real_time_factor>
@@ -76,37 +76,34 @@
       <background>0.7 0.7 0.7 1</background>
       <shadows>true</shadows>
     </scene>
-    <model name='ground_plane'>
+    <model name='sutd_field'>
       <static>true</static>
       <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>${./attachments/sutd_field.dae}</uri>
+            </mesh>
+          </geometry>
+        </visual>
         <collision name='collision'>
           <geometry>
             <plane>
               <normal>0 0 1</normal>
               <size>100 100</size>
             </plane>
+            <mesh>
+              <uri>${./attachments/sutd_field.dae}</uri>
+            </mesh>
           </geometry>
           <surface>
             <friction>
-              <ode/>
+              <ode />
             </friction>
             <bounce/>
             <contact/>
           </surface>
         </collision>
-        <visual name='visual'>
-          <geometry>
-            <plane>
-              <normal>0 0 1</normal>
-              <size>100 100</size>
-            </plane>
-          </geometry>
-          <material>
-            <ambient>0.8 0.8 0.8 1</ambient>
-            <diffuse>0.8 0.8 0.8 1</diffuse>
-            <specular>0.8 0.8 0.8 1</specular>
-          </material>
-        </visual>
         <pose>0 0 0 0 0 0</pose>
         <inertial>
           <pose>0 0 0 0 0 0</pose>
@@ -122,41 +119,7 @@
         </inertial>
         <enable_wind>false</enable_wind>
       </link>
-      <pose>0 0 0 0 0 0</pose>
-      <self_collide>false</self_collide>
-    </model>
-    <model name='schoolField'>
-      <link name='link'>
-        <visual name='visual'>
-          <geometry>
-            <mesh>
-              <uri>${./img/schoolField.dae}</uri>
-            </mesh>
-          </geometry>
-        </visual>
-        <collision name='collision'>
-          <geometry>
-            <mesh>
-              <uri>${./img/schoolField.dae}</uri>
-            </mesh>
-          </geometry>
-        </collision>
-        <pose>0 0 0 0 0 0</pose>
-        <inertial>
-          <pose>0 0 0 0 0 0</pose>
-          <mass>1</mass>
-          <inertia>
-            <ixx>1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>1</iyy>
-            <iyz>0</iyz>
-            <izz>1</izz>
-          </inertia>
-        </inertial>
-        <enable_wind>false</enable_wind>
-      </link>
-      <pose>0 0 0 0 0 0</pose>
+      <pose>10.244206775704033 -3.1782577037811279 2.1579395936832668e-05 0 0 0</pose>
       <static>false</static>
       <self_collide>false</self_collide>
     </model>
