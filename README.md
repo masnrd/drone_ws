@@ -4,6 +4,11 @@ A ROS workspace for the onboard computer.
 - See [DRONE_IMPLEMENTATION](./docs/DRONE_IMPLEMENTATION.md) for the planned implementation for the drone.
 
 ## Installation
+Clone this repository along with all submodules:
+```
+git clone --recursive https://github.com/masnrd/drone_ws.git
+```
+
 Install all Python dependencies with:
 ```
 python3 -m pip install -r requirements.txt
