@@ -1,12 +1,15 @@
 import "./App.css";
 import { Route, Routes } from "react-router-dom";
-import Map from "./components/Map.js";
+import Pathfinding from "./pages/PathfindingPage";
+import { useState } from "react";
+import { Path } from "leaflet";
 
 const App = () => {
+  const [map, setMap] = useState(null);
   return (
     <div>
       <Routes>
-        <Route path="/" element={<Map />} />
+        <Route path="/" element={<Pathfinding />} />
       </Routes>
     </div>
   );
