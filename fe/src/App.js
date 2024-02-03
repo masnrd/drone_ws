@@ -1,18 +1,18 @@
-import "./App.css";
 import { Route, Routes } from "react-router-dom";
-import Pathfinding from "./pages/PathfindingPage";
-import { useState } from "react";
-import { Path } from "leaflet";
 
-const App = () => {
-  const [map, setMap] = useState(null);
+import "./App.css";
+import Pathfinding from "./pages/PathfindingPage";
+import Setup from "./components/Setup";
+
+function App() {
   return (
-    <div>
+    <>
       <Routes>
         <Route path="/" element={<Pathfinding />} />
+        <Route path="/setup" element={<Setup />} />
       </Routes>
-    </div>
-  );
-};
+    </>
+  )
+}
 
 export default App;
