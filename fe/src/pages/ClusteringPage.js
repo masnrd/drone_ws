@@ -15,7 +15,7 @@ function AddHotspotOnClick({onNewPoint}) {
   return null;
 }
 
-function Setup() {
+function ClusteringPage() {
   const [activeTab, setActiveTab] = useState('setupAndHotspots');
 
   const center = [1.3399775009363866, 103.96258672159254];
@@ -321,4 +321,4 @@ const activeButtonStyle = {
   );
 }
 
-export default Setup;
+export default ClusteringPage;

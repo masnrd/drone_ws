@@ -2,14 +2,14 @@ import { Route, Routes } from "react-router-dom";
 
 import "./App.css";
 import Pathfinding from "./pages/PathfindingPage";
-import Setup from "./components/Setup";
+import ClusteringPage from "./pages/ClusteringPage";
 
 function App() {
   return (
     <>
       <Routes>
         <Route path="/" element={<Pathfinding />} />
-        <Route path="/setup" element={<Setup />} />
+        <Route path="/setup" element={<ClusteringPage />} />
       </Routes>
     </>
   )
