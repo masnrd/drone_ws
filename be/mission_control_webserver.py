@@ -9,17 +9,19 @@ A Flask webserver that:
     - The web client is provided in the `static` directory provided in the package.
 """
 import logging
+import json
 from flask import Flask, request, send_from_directory, Response
 from typing import Dict, Tuple
 from queue import Queue
 from pathlib import Path
 
+from mission_utils import Mission
 from drone_utils import DroneState, DroneId
 from drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
 from maplib import LatLon
 
 class MCWebServer:
-    def __init__(self, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
+    def __init__(self, mission:Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
         self.static_dir = Path("frontend")
         # Flask.logger_name = "listlogger"
         self.app = Flask(
@@ -29,6 +31,7 @@ class MCWebServer:
             template_folder=self.static_dir,
         )
 
+        self.mission = mission
         self.drone_states = drone_states
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
 
@@ -42,11 +45,15 @@ class MCWebServer:
     def route_index(self):
         return send_from_directory(self.static_dir, "index.html")
 
-    def route_info(self) -> Dict[int, str]:
-        ret: Dict[int, str] = {}
+    def route_info(self) -> Dict[str, str]:
+        ret: Dict[str, Dict]
+        drones: Dict[int, str] = {}
+
+        ret: Dict[str, str] = {}
         for drone_id, drone_state in self.drone_states.items():
-            ret[drone_id] = drone_state.toJSON()
-        
+            drones[drone_id] = drone_state.toJSON()
+        ret["mission"] = self.mission.__dict__
+        ret["drones"] = drones
         return ret
     
     def route_action_moveto(self) -> Dict[int, str]:

@@ -7,6 +7,7 @@ from maplib import LatLon
 from drone_utils import DroneId, DroneState, DroneCommand, DroneMode, DroneCommandId
 from mission_control_webserver import MCWebServer
 from fake_drone_system import DroneSystem
+from mission_utils import Mission
 
 logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
@@ -53,6 +54,7 @@ class MCNode:
         self.drone_sys.add_command(drone_id, drone_cmd)
 
 def main(args=None):
+    mission = Mission()
     drone_states = {
         DroneId(69): DroneState(69),
         DroneId(1): DroneState(1),
@@ -63,7 +65,7 @@ def main(args=None):
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
 
     # Start web server
-    webserver = MCWebServer(drone_states, commands)
+    webserver = MCWebServer(mission, drone_states, commands)
     webserver_thread = threading.Thread(target=webserver.run, daemon=True)
     webserver_thread.start()
 

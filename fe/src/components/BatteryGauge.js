@@ -57,14 +57,13 @@ const styles = {
 const BatteryGauge = ({ drone_id, mode, percentage }) => {
   const percent10 = Math.round((percentage / 100) * gaugeBarsNb);
   const percentageArray = [...Array(percent10).keys()];
-  console.log("TESTING" + String(drone_id));
   return (
     <>
       <div style={styles.container}>
         <img src={GaugeBg} style={styles.bg} />
         <div style={styles.barsContainer}>
           {percentageArray.map((ele, index) => (
-            <div style={styles.barContainer}>
+            <div style={styles.barContainer} key={index}>
               {index === 0 ? (
                 <div
                   key={index}
