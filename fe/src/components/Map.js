@@ -4,22 +4,31 @@ import "leaflet/dist/leaflet.css";
 import { polygonToCells, cellToBoundary } from "h3-js";
 import "./Map.css";
 import DroneMarker from "./DroneMarker";
+import DroneDrawer from "./DroneDrawer";
+import Fab from "@mui/material/Fab";
+import AddIcon from "@mui/icons-material/Add";
 
 export default function Map() {
   const start_position = [1.3430293739520736, 103.9591294705276];
   const [hexagons, setHexagons] = useState([]);
   const [drones, setDrones] = useState([]);
+  const [selectedDrone, setSelectedDrone] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(true);
+
+  function handleDroneClick(id) {
+    console.log("Set drone", id);
+    setSelectedDrone(id);
+  }
 
   const url = "http://127.0.0.1:5000/api/info";
   useEffect(() => {
     fetch(url, { mode: "cors" })
       .then((response) => response.json())
       .then((data) => {
-        const parsedDrones = Object.values(data).map((droneData) =>
-          JSON.parse(droneData)
-        );
+        console.log(data);
+        const dronesData = data["drones"];
+        const parsedDrones = Object.values(dronesData);
         setDrones(parsedDrones);
-        console.log(parsedDrones);
       })
       .catch((error) => console.error("Error in fetching drone data:", error));
   });
@@ -35,13 +44,15 @@ export default function Map() {
       const sw = bounds.getSouthWest();
       const ne = bounds.getNorthEast();
 
+      const expansionAmount = 0.005; // Adjust this value as needed
+
       // Reference: https://github.com/matthiasfeist/what-the-h3index
       const boundingBox = [
-        [sw.lng, sw.lat],
-        [ne.lng, sw.lat],
-        [ne.lng, ne.lat],
-        [sw.lng, ne.lat],
-        [sw.lng, sw.lat], // Closing the loop
+        [sw.lng - expansionAmount, sw.lat - expansionAmount], // Expanded SW corner
+        [ne.lng + expansionAmount, sw.lat - expansionAmount], // Bottom-right corner
+        [ne.lng + expansionAmount, ne.lat + expansionAmount], // Expanded NE corner
+        [sw.lng - expansionAmount, ne.lat + expansionAmount], // Top-left corner
+        [sw.lng - expansionAmount, sw.lat - expansionAmount], // Closing the loop (back to expanded SW corner)
       ];
 
       const h3Resolution = calculateH3Resolution(map.getZoom());
@@ -72,36 +83,46 @@ export default function Map() {
   }
 
   return (
-    <MapContainer
-      center={start_position}
-      zoom={18}
-      minZoom={16}
-      maxZoom={30}
-      scrollWheelZoom={true}
-      // style={{ height: "100vh" }}
-    >
-      <TileLayer
+    <>
+      {drones ? (
+        <DroneDrawer initialOpen={drawerOpen} droneData={drones} />
+      ) : (
+        <Fab className="fab-button" color="primary" aria-label="add">
+          <AddIcon />
+        </Fab>
+      )}
+      <MapContainer
+        center={start_position}
         zoom={18}
         minZoom={16}
         maxZoom={30}
-        attribution="&copy; OpenStreetMap contributors"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      <H3Overlay />
-      {/* Use hexagons length as key */}
-      <GeoJSON
-        key={hexagons.length}
-        data={{ type: "FeatureCollection", features: hexagons }}
-      />
-      {drones.map((drone) => (
-        <DroneMarker
-          drone_id={drone.drone_id}
-          battery_percentage={drone.battery_percentage}
-          lon={drone.lon}
-          lat={drone.lat}
-          mode={drone.mode}
+        scrollWheelZoom={true}
+        // style={{ height: "100vh" }}
+      >
+        <TileLayer
+          zoom={18}
+          minZoom={16}
+          maxZoom={30}
+          attribution="&copy; OpenStreetMap contributors"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-      ))}
-    </MapContainer>
+        <H3Overlay />
+        <GeoJSON
+          key={hexagons.length}
+          data={{ type: "FeatureCollection", features: hexagons }}
+        />
+        {drones.map((drone) => (
+          <DroneMarker
+            key={drone.drone_id}
+            drone_id={drone.drone_id}
+            battery_percentage={drone.battery_percentage}
+            lon={drone.lon}
+            lat={drone.lat}
+            mode={drone.mode}
+            setSelectedDroneEvent={handleDroneClick} // Changed here
+          ></DroneMarker>
+        ))}
+      </MapContainer>
+    </>
   );
 }

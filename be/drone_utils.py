@@ -103,24 +103,18 @@ class DroneState:
         """ Returns the most recent DroneCommand sent to the drone, or None if not set yet. """
         return self._last_command
 
-    def toJSON(self) -> str:
+    def toJSON(self) -> Dict:
         lat, lon = "null", "null"
         if self._position is not None:
             lat, lon = self._position.lat, self._position.lon
         command = "-"
         if self._last_command is not None:
             command = DroneCommandId(self._last_command.command_id).name
-        
-        ret = "{"
-        ret += f"\"drone_id\": {self._drone_id},"
-        ret += f"\"mode\": \"{DroneMode(self._mode).name}\", "
-        ret += f"\"battery_percentage\": {self._battery_percentage}, "
-        ret += f"\"estimated_rtt\": {self._estimated_rtt}, "
-        ret += f"\"lat\": {lat}, "
-        ret += f"\"lon\": {lon}, "
-        ret += f"\"last_command\": \"{command}\" "
-        ret += "}"
-
+        ret = self.__dict__
+        ret["mode"] = DroneMode(self._mode).name
+        ret["lat"] = lat
+        ret["lon"] = lon
+        ret["last_command"] = command
         return ret
     
     def __repr__(self) -> str:
