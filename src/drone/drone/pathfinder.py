@@ -76,7 +76,7 @@ class PathFinder(ABC):
         pass
 
 class OutwardSpiralPathFinder(PathFinder):
-    def __init__(self, res: int, centre: tuple):
+    def __init__(self, res: int, centre: Tuple[float, float]):
         super().__init__(res, centre)
         self.segment_start_ij_coord = None
         self.next_path_segment = []
@@ -96,7 +96,7 @@ class OutwardSpiralPathFinder(PathFinder):
         return current_ij_coord
 
     # Implementation of abstract method that returns next waypoint
-    def find_next_step(self, current_position: tuple[float, float], prob_map: dict) -> tuple[float, float]:
+    def find_next_step(self, current_position: Tuple[float, float], prob_map: Dict) -> Tuple[float, float]:
         current_position_ij = h3.experimental_h3_to_local_ij(self.centre_hex, h3.geo_to_h3(
             current_position[0], current_position[1], resolution=self.res))
 

@@ -6,12 +6,12 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.task import Future
-from rclpy.exceptions import ParameterUninitializedException
 from .maplib import LatLon
 from .pathfinder import PathfinderState
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode, VehicleStatus, BatteryStatus
 from mc_interface_msgs.msg import Ready
 from mc_interface_msgs.srv import Command, Status
+from os import environ
 
 DEFAULT_DRONE_ID = 69
 CYCLE_INTERVAL = 0.1   # 100ms between each cycle.
@@ -99,11 +99,19 @@ class DroneNode(Node):
         super().__init__("drone")
 
         # Obtain drone ID
-        try:
-            self.declare_parameter("droneId", rclpy.Parameter.Type.INTEGER)
-            drone_id = self.get_parameter("droneId").get_parameter_value().integer_value
-        except ParameterUninitializedException:
-            drone_id = None
+        if environ == "iron":
+            from rclpy.exceptions import ParameterUninitializedException
+            try:
+                self.declare_parameter("droneId", rclpy.Parameter.Type.INTEGER)
+                drone_id = self.get_parameter("droneId").get_parameter_value().integer_value
+            except ParameterUninitializedException:
+                drone_id = None
+        else:
+            # We're running on ROS2 Foxy, so we need to get the drone_id this way
+            self.declare_parameter("droneId", -1)
+            drone_id = self.get_parameter("drone_id").get_parameter_value().integer_value
+            if drone_id == -1:
+                drone_id = None
 
         # Initialise drone node
         self.qos_profile = QoSProfile(
