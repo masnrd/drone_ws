@@ -110,10 +110,9 @@ class DroneState:
         command = "-"
         if self._last_command is not None:
             command = DroneCommandId(self._last_command.command_id).name
-        ret = self.__dict__
-        ret["mode"] = DroneMode(self._mode).name
-        ret["lat"] = lat
-        ret["lon"] = lon
+        ret = {}
+        for k, v in self.__dict__.items():
+            ret[k[1:]] = v
         ret["last_command"] = command
         return ret
     

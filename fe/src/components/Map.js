@@ -1,37 +1,13 @@
 import { React, useEffect, useState } from "react";
-import { MapContainer, TileLayer, useMapEvents, GeoJSON } from "react-leaflet";
+import { MapContainer, TileLayer, useMapEvents, GeoJSON, LayersControl, FeatureGroup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { polygonToCells, cellToBoundary } from "h3-js";
 import "./Map.css";
 import DroneMarker from "./DroneMarker";
-import DroneDrawer from "./DroneDrawer";
-import Fab from "@mui/material/Fab";
-import AddIcon from "@mui/icons-material/Add";
 
-export default function Map() {
+export default function Map({ drones, setMap }) {
   const start_position = [1.3430293739520736, 103.9591294705276];
   const [hexagons, setHexagons] = useState([]);
-  const [drones, setDrones] = useState([]);
-  const [selectedDrone, setSelectedDrone] = useState(null);
-  const [drawerOpen, setDrawerOpen] = useState(true);
-
-  function handleDroneClick(id) {
-    console.log("Set drone", id);
-    setSelectedDrone(id);
-  }
-
-  const url = "http://127.0.0.1:5000/api/info";
-  useEffect(() => {
-    fetch(url, { mode: "cors" })
-      .then((response) => response.json())
-      .then((data) => {
-        console.log(data);
-        const dronesData = data["drones"];
-        const parsedDrones = Object.values(dronesData);
-        setDrones(parsedDrones);
-      })
-      .catch((error) => console.error("Error in fetching drone data:", error));
-  });
 
   function H3Overlay() {
     const map = useMapEvents({
@@ -43,7 +19,6 @@ export default function Map() {
       const bounds = map.getBounds();
       const sw = bounds.getSouthWest();
       const ne = bounds.getNorthEast();
-
       const expansionAmount = 0.005; // Adjust this value as needed
 
       // Reference: https://github.com/matthiasfeist/what-the-h3index
@@ -84,42 +59,39 @@ export default function Map() {
 
   return (
     <>
-      {drones ? (
-        <DroneDrawer initialOpen={drawerOpen} droneData={drones} />
-      ) : (
-        <Fab className="fab-button" color="primary" aria-label="add">
-          <AddIcon />
-        </Fab>
-      )}
       <MapContainer
         center={start_position}
         zoom={18}
         minZoom={16}
         maxZoom={30}
         scrollWheelZoom={true}
-        // style={{ height: "100vh" }}
+        ref={setMap}
       >
         <TileLayer
           zoom={18}
-          minZoom={16}
           maxZoom={30}
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <H3Overlay />
-        <GeoJSON
-          key={hexagons.length}
-          data={{ type: "FeatureCollection", features: hexagons }}
-        />
+        <LayersControl>
+          <LayersControl.Overlay name="H3 Overlay">
+            <FeatureGroup>
+              <H3Overlay />
+              <GeoJSON
+                key={hexagons.length}
+                data={{ type: "FeatureCollection", features: hexagons }}
+              />
+            </FeatureGroup>
+          </LayersControl.Overlay>
+      </LayersControl>
         {drones.map((drone) => (
           <DroneMarker
             key={drone.drone_id}
             drone_id={drone.drone_id}
             battery_percentage={drone.battery_percentage}
-            lon={drone.lon}
-            lat={drone.lat}
+            lon={drone.position.lon}
+            lat={drone.position.lat}
             mode={drone.mode}
-            setSelectedDroneEvent={handleDroneClick} // Changed here
           ></DroneMarker>
         ))}
       </MapContainer>
