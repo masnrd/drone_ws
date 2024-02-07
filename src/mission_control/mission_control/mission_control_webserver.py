@@ -8,7 +8,8 @@ A Flask webserver that:
 - Provides a web client to interact with the API.
     - The web client is provided in the `static` directory provided in the package.
 """
-
+# UNCOMMENT FOR PYTHON3.8
+# from __future__ import annotations
 from flask import Flask, request, send_from_directory
 from ament_index_python import get_package_share_directory
 from typing import Dict, Tuple

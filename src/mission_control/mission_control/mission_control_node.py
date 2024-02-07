@@ -1,3 +1,5 @@
+# UNCOMMENT FOR PYTHON3.8
+# from __future__ import annotations
 import rclpy
 import threading
 from queue import Queue, Empty
