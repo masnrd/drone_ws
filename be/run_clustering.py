@@ -6,7 +6,7 @@ from typing import List, Dict
 
 
 def run_clustering(hotspots_location: List[Dict]):
-    hotspots = [(entry["lat"], entry["lng"]) for entry in hotspots_location]
+    hotspots = [(entry["position"]["lat"], entry["position"]["lng"]) for entry in hotspots_location]
     hotspots = [Point(i, hotspots[i]) for i in range(len(hotspots))]
 
     # Find clusters

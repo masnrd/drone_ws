@@ -23,7 +23,7 @@ const Tab = ({
   const activeClass = active ? " active" : "";
 
   return (
-    <div id={id} class="mt-30 p-20..." className={`sidebar-pane${activeClass}`}>
+    <div id={id} className={`sidebar-pane${activeClass}`}>
       <h1 className="sidebar-header">
         {header}
         <div

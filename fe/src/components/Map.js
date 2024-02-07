@@ -1,5 +1,5 @@
 import { React, useEffect, useState } from "react";
-import { MapContainer, TileLayer, useMapEvents, GeoJSON } from "react-leaflet";
+import { MapContainer, TileLayer, useMapEvents, GeoJSON, LayersControl, FeatureGroup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { polygonToCells, cellToBoundary } from "h3-js";
 import "./Map.css";
@@ -73,18 +73,24 @@ export default function Map({ drones, setMap }) {
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <H3Overlay />
-        <GeoJSON
-          key={hexagons.length}
-          data={{ type: "FeatureCollection", features: hexagons }}
-        />
+        <LayersControl>
+          <LayersControl.Overlay name="H3 Overlay">
+            <FeatureGroup>
+              <H3Overlay />
+              <GeoJSON
+                key={hexagons.length}
+                data={{ type: "FeatureCollection", features: hexagons }}
+              />
+            </FeatureGroup>
+          </LayersControl.Overlay>
+      </LayersControl>
         {drones.map((drone) => (
           <DroneMarker
             key={drone.drone_id}
             drone_id={drone.drone_id}
             battery_percentage={drone.battery_percentage}
-            lon={drone.lon}
-            lat={drone.lat}
+            lon={drone.position.lon}
+            lat={drone.position.lat}
             mode={drone.mode}
           ></DroneMarker>
         ))}

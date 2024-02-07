@@ -6,7 +6,7 @@ import DroneStatusCard from "./DroneStatusCard.js";
 import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
 import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
 
-function SidebarComponent({ map, drones }) {
+export default function SidebarComponent({ map, drones }) {
   const [openTab, setOpenTab] = useState("home");
   const onClose = () => {
     setOpenTab(false);
@@ -30,12 +30,10 @@ function SidebarComponent({ map, drones }) {
       >
         <Tab id="home" header="Drones" icon={<FormatListBulletedIcon />} active>
           {drones.map((drone) => (
-            <DroneStatusCard droneData={drone} map={map} />
+            <DroneStatusCard key={drone.drone_id} droneData={drone} map={map} />
           ))}
         </Tab>
       </Sidebar>
     </>
   );
 }
-
-export default SidebarComponent;

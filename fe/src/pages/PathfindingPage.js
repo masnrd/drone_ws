@@ -13,11 +13,7 @@ export default function Pathfinding() {
       .then((data) => {
         const dronesData = data["drones"];
         const parsedDrones = Object.values(dronesData);
-        if (drones === parsedDrones) {
-          console.log("No change");
-        } else {
-          setDrones(parsedDrones);
-        }
+        setDrones(parsedDrones);
       })
       .catch((error) => console.error("Error in fetching drone data:", error));
   });
