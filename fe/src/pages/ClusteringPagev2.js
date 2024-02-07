@@ -42,10 +42,12 @@ export default function ClusteringPagev2() {
           const parsedHotspots = Object.values(hotspotData);
     
           // Update each hotspot object to include an icon property
+          console.log(parsedHotspots);
           const hotspotsWithIcons = parsedHotspots.map(hotspot => ({
             ...hotspot,
             icon: createHotSpotIcon(),
-          }));    
+          }));   
+          setHotspots(hotspotsWithIcons); 
         });
         }, []);
   

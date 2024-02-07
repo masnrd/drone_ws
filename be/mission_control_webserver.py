@@ -63,7 +63,8 @@ class MCWebServer:
             "hotspots": self.mission.hotspots,  # Assuming this is already serializable
             "clusters": self.mission.cluster_centres,  # Assuming this is already serializable
         }
-        return jsonify(ret)
+        jsonify(ret)
+        return ret
     
     def route_action_moveto(self) -> Tuple[Dict, int]:
         drone_id = request.args.get("drone_id", type=int, default=None)
@@ -111,7 +112,6 @@ class MCWebServer:
         """"Update mission clusters centres"""
         data = request.form.to_dict()
         confirmed_clusters = json.loads(data.get("clusters", None))
-        print("confirmed cluster", confirmed_clusters)
         self.mission.cluster_centres = confirmed_clusters
         self.mission.cluster_centres_to_explore += confirmed_clusters
         return {}, 200
