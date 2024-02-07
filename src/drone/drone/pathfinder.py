@@ -9,7 +9,7 @@ NOTICE for Pathfinding team:
 import h3
 import numpy as np
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, NewType
+from typing import Tuple, Dict, NewType, Union
 from .maplib import LatLon
 
 DEFAULT_RESOLUTION = 12
@@ -46,6 +46,8 @@ class PathfinderState:
         self._prob_map = prob_map
 
     def get_next_waypoint(self, cur_pos: LatLon) -> LatLon:
+        if cur_pos is None:
+            raise RuntimeError("get_next_waypoint: cur_pos is None")
         cur_tup = (cur_pos.lat, cur_pos.lon)
         next_tup = self._pathfinder.find_next_step(cur_tup, self._prob_map)
         return LatLon(next_tup[0], next_tup[1])
@@ -63,7 +65,7 @@ class PathFinder(ABC):
         self.centre_hex = h3.geo_to_h3(centre[0], centre[1], resolution=self.res)
 
     @abstractmethod
-    def find_next_step(self, current_position: Tuple[float, float], prob_map: np.ndarray) -> Tuple[float, float]:
+    def find_next_step(self, current_position: Tuple[float, float], prob_map: np.ndarray) -> Union[Tuple[float, float], None]:
         """
         Find the next step to go to.
 

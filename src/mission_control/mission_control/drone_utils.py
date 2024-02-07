@@ -23,15 +23,14 @@ ProbabilityMap = NewType("ProbabilityMap", Dict[str, float])
 class DroneMode(IntEnum):
     """ Current mode reported by the drone """
     DISCONNECTED = -100
-    ERROR        = -99
-    RTB          = -2  # Drone is returning to MC
-    IDLE         = -1  # Drone is idle
-    INIT         = 0   # Complete initialisation
-    CONNECT_FC   = 1   # Connecting to Flight Controller (FC)
-    INIT_FC      = 2   # Initialisation of subscriptions and publishers
-    CONNECT_MC   = 3   # Connecting to Mission Control (MC)
-    TRAVEL       = 4   # Moving to Sector
-    SEARCH       = 5   # Searching Sector
+    INIT    = 0
+    CONN_FC = 1  # Drone is connecting to FC (Flight Controller)
+    PREP_FC = 2  # Drone is preparing FC (i.e. arming and taking off)
+    CONN_MC = 3  # Drone is connecting to MC (Mission Control)
+    IDLE    = 4  # Drone is connected, waiting for instructions
+    TRAVEL  = 5  # Drone is moving to a position
+    SEARCH  = 6  # Drone is searching a sector
+    EXIT    = 7  # Drone is landing and ending its state.
 
 class DroneCommandId(IntEnum):
     RTB           = 0  # Force RTB. No further commands will be accepted.
