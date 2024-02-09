@@ -4,10 +4,11 @@ Utilities for interacting with the drones.
 """
 import struct
 from enum import IntEnum
-from typing import Union, NewType, Dict, Any
-
-from maplib import LatLon
-from ros2_stub import Command
+from rclpy.node import Node
+from typing import Union, NewType, Dict
+from mc_interface_msgs.srv import Command, Status
+from mc_interface_msgs.msg import Ready
+from .maplib import LatLon
 
 RTT_WEIGHTING = 0.125
 RTT_TIMEOUT_MULTIPLIER = 10    # This, multiplied by RTT, determines the timeout
