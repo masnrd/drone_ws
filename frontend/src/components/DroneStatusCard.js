@@ -14,6 +14,16 @@ const DroneStatusCard = ({ droneData, map }) => {
     map.setView(center, zoom);
   });
 
+  let lat = droneData.position.lat
+  let lon = droneData.position.lon
+  if (lat == null || lon == null) {
+    lat = "(Unknown)";
+    lon = "(Unknown)";
+  } else {
+    lat = lat.toFixed(3);
+    lon = lon.toFixed(3);
+  }
+
   return (
     <Card sx={{ minWidth: 275, marginBottom: 2 }}>
       <CardActionArea onClick={setViewToDrone}>
@@ -22,7 +32,7 @@ const DroneStatusCard = ({ droneData, map }) => {
             Drone ID: {droneData.drone_id}
           </Typography>
           <Typography variant="h5" component="div">
-            Position: ({droneData.position.lat.toFixed(3)}, {droneData.position.lon.toFixed(3)})
+            Position: ({lat}, {lon})
           </Typography>
           <Typography sx={{ mb: 1.5 }} color="text.secondary">
             Mode: {droneData.mode}

@@ -84,7 +84,7 @@ export default function Map({ drones, setMap }) {
             </FeatureGroup>
           </LayersControl.Overlay>
       </LayersControl>
-        {drones.map((drone) => (
+        {drones.filter((drone) => (drone.position.lat != null && drone.position.lon != null)).map((drone) => (
           <DroneMarker
             key={drone.drone_id}
             drone_id={drone.drone_id}

@@ -5,14 +5,10 @@ Utilities for interacting with the drones.
 import struct
 from enum import IntEnum
 from rclpy.node import Node
-from typing import Union, NewType, Dict
+from typing import Union, NewType, Dict, Any
 from mc_interface_msgs.srv import Command, Status
 from mc_interface_msgs.msg import Ready
 from .maplib import LatLon
-
-RTT_WEIGHTING = 0.125
-RTT_TIMEOUT_MULTIPLIER = 10    # This, multiplied by RTT, determines the timeout
-MC_HEARTBEAT_INTERVAL = 1 # 1 s
 
 # Drone ID type definition
 DroneId = NewType("DroneId", int)
@@ -105,7 +101,7 @@ class DroneState:
 
     def get_dict(self) -> Dict[str, Any]:
         """ Get the dictionary of the drone's values, which can be JSONified. """
-        lat, lon = "null", "null"
+        lat, lon = None, None
         if self._position is not None:
             lat, lon = self._position.lat, self._position.lon
         command = "-"
@@ -117,7 +113,9 @@ class DroneState:
             "mode": str(self.get_mode().name),
             "battery_percentage": self.get_battery_percentage(),
             "estimated_rtt": self.get_estimated_rtt(),
-            "lat": {lat}, "lon": {lon},
+            "position": {
+                "lat": lat, "lon": lon
+            },
             "last_command": command,
         }
         
