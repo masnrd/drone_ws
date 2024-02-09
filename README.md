@@ -1,7 +1,6 @@
 # masnrd_ws
 
 A ROS workspace for the onboard computer. 
-- See [DRONE_IMPLEMENTATION](./docs/DRONE_IMPLEMENTATION.md) for the planned implementation for the drone.
 
 ## Installation
 Clone this repository along with all submodules:
@@ -9,14 +8,15 @@ Clone this repository along with all submodules:
 git clone --recursive https://github.com/masnrd/drone_ws.git
 ```
 
-Install all Python dependencies with:
-```
-python3 -m pip install -r requirements.txt
+Install all dependencies with:
+```bash
+python3 -m pip install -r requirements.txt  # Installs all Python3 dependencies for the ROS2 mission control and drone nodes.
+npm install                                 # Installs all Node dependencies for the React frontend, not needed if you're not running that.
 ```
 
 If the ROS2 distribution hasn't been initialised before, do so:
 ```bash
-source /opt/ros/foxy/setup.bash # or your preferred ROS2 distribution
+source /opt/ros/iron/setup.bash
 ```
 
 In the project root:
@@ -61,21 +61,13 @@ To ensure communication works, start the Micro XRCE-DDS Agent.
 MicroXRCEAgent udp4 -p 8888
 ```
 
-In a **second** terminal, start the Gazebo server.
+**Server for Drone Simulation**: In a **second** terminal, start the Gazebo server.
 ```bash
 # In the PX4-gazebo-models directory
-python simulation-gazebo --world SUTD_field
+python3 simulation-gazebo --world SUTD_field
 ```
 
-In **third** terminal, run the Mission Control node. 
-```bash
-# In the drone_ws directory
-source ./install/setup.bash
-source default_settings.sh   # Environment vars like start location, drone count
-ros2 run mission_co)ntrol mission_control_node
-```
-
-In a **fourth** terminal, run the launch file, which launches both the necessary simulated flight controllers and the ROS2 drone nodes.
+**Drone Simulation**: In a **third** terminal, run the launch file, which launches both the necessary simulated flight controllers and the ROS2 drone nodes.
 ```bash
 # In the drone_ws directory
 source ./install/setup.bash
@@ -84,10 +76,21 @@ ros2 launch full_launcher drone_launch.py
 ```
 - Warning: Since it takes a while for the flight controller to actually reach the READY state, the drone node may give up connecting before actually connecting. Just restart for now.
 
-You can connect to the web application at `127.0.0.1:5000`.
-- Two endpoints are provided on the Flask backend.
-    - `/api/info`: Returns a dump of the state of every drone connected (just 1 drone for now).
-    - `/api/action/search?drone_id=[drone_id]&lat=[latitude]&lon=[longitude]`: Provides a `SEARCH_SECTOR` command to drone `drone_id`, starting at `latitude, longitude`.
-        - It is recommended to choose a latitude and longitude close to the starting point of the drone.
-        - Note that the command is dropped if the drone is not connected to mission control, this is still in progress.
-- For now, the frontend is simply a table displaying the state of all drones (defined by the `drone_states` dictionary), and polls the `/api/info` endpoint every second.
+
+**Mission Control Backend**: In a **fourth** terminal, run the Mission Control backend. This launches the ROS2 node that connects to the drones, and the Flask web server that runs the API backend. 
+```bash
+# In the drone_ws directory
+source ./install/setup.bash
+source default_settings.sh   # Environment vars like start location, drone count
+ros2 run mission_control mission_control_node
+```
+
+**Mission Control Frontend**: Finally, in a fifth terminal, run the Mission Control React frontend.
+```bash
+# In the drone_ws directory
+npm start
+```
+- You can connect to this at `127.0.0.1:3000`. This opens a map showing the locations of each drone.
+    - Right now, the simulated field in Gazebo isn't exactly aligned with its position due to its rotation -- hence the position of the simulated drone won't exactly appear to match with the drone on the frontend.
+    - Another TODO is to make the React frontend use the environment variable `PX4_HOME_LAT` and `PX4_HOME_LON` to set the start position of the map.
+- Clustering can be done at `127.0.0.1:3000/cluster`.

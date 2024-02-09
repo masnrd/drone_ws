@@ -5,14 +5,10 @@ Utilities for interacting with the drones.
 import struct
 from enum import IntEnum
 from rclpy.node import Node
-from typing import Union, NewType, Dict
+from typing import Union, NewType, Dict, Any
 from mc_interface_msgs.srv import Command, Status
 from mc_interface_msgs.msg import Ready
 from .maplib import LatLon
-
-RTT_WEIGHTING = 0.125
-RTT_TIMEOUT_MULTIPLIER = 10    # This, multiplied by RTT, determines the timeout
-MC_HEARTBEAT_INTERVAL = 1 # 1 s
 
 # Drone ID type definition
 DroneId = NewType("DroneId", int)
@@ -103,24 +99,26 @@ class DroneState:
         """ Returns the most recent DroneCommand sent to the drone, or None if not set yet. """
         return self._last_command
 
-    def toJSON(self) -> str:
-        lat, lon = "null", "null"
+    def get_dict(self) -> Dict[str, Any]:
+        """ Get the dictionary of the drone's values, which can be JSONified. """
+        lat, lon = None, None
         if self._position is not None:
             lat, lon = self._position.lat, self._position.lon
         command = "-"
         if self._last_command is not None:
             command = DroneCommandId(self._last_command.command_id).name
-        
-        ret = "{"
-        ret += f"\"drone_id\": {self._drone_id},"
-        ret += f"\"mode\": \"{DroneMode(self._mode).name}\", "
-        ret += f"\"battery_percentage\": {self._battery_percentage}, "
-        ret += f"\"estimated_rtt\": {self._estimated_rtt}, "
-        ret += f"\"lat\": {lat}, "
-        ret += f"\"lon\": {lon}, "
-        ret += f"\"last_command\": \"{command}\" "
-        ret += "}"
 
+        ret = {
+            "drone_id": str(self.get_drone_id()),
+            "mode": str(self.get_mode().name),
+            "battery_percentage": self.get_battery_percentage(),
+            "estimated_rtt": self.get_estimated_rtt(),
+            "position": {
+                "lat": lat, "lon": lon
+            },
+            "last_command": command,
+        }
+        
         return ret
     
     def __repr__(self) -> str:
@@ -129,47 +127,3 @@ class DroneState:
             lat, lon = self._position.lat, self._position.lon
         
         return f"Drone {self._drone_id}:\n\tPosition: {lat}, {lon}\n\tMode: {DroneMode(self._mode).name}\n\tBattery: {self._battery_percentage}%\n\tRTT: {self._estimated_rtt}"
-
-
-class DroneConnection:
-    """
-    A connection to a drone. 
-    - The drone state must be initialised by the caller, to allow for it to be passed to various threads.
-    """
-    def __init__(self, drone_id: DroneId, drone_state: DroneState, node: Node):
-        self.state = drone_state
-        self.node = node
-        self.timeout = None
-        self.pending_cmd_fut = None
-        self.sub_ready = node.create_subscription(
-            Ready,
-            f"/mc_{drone_id}/mc/out/ready",
-            node.mc_recv_ready,
-            node.qos_profile,
-        )
-        self.cli_cmd = node.create_client(
-            Command,
-            f"/mc_{drone_id}/mc/srv/cmd",
-        )
-        self.srv_status = node.create_service(
-            Status,
-            f"/mc_{drone_id}/mc/srv/status",
-            node.mc_recv_status,
-        )
-    
-    def update_rtt(self, sample_rtt: float):
-        if self.state._estimated_rtt == 0.0:
-            self.state._estimated_rtt = sample_rtt
-        else:
-            self.estimated_rtt = ((1 - RTT_WEIGHTING) * self.state._estimated_rtt) + (RTT_WEIGHTING * sample_rtt)
-
-        if self.timeout is not None:
-            self.node.destroy_timer(self.timeout)
-
-        timeout_interval = MC_HEARTBEAT_INTERVAL + (self.state._estimated_rtt * RTT_TIMEOUT_MULTIPLIER)
-        self.timeout = self.node.create_timer(timeout_interval, self.disconnected_action)
-
-    def disconnected_action(self):
-        self.node.destroy_timer(self.timeout)
-        self.state._mode = DroneMode.DISCONNECTED
-        print(f"Warning: Drone {self.state._drone_id} disconnected.")
