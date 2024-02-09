@@ -70,7 +70,6 @@ class MCWebServer:
             "hotspots": self.mission.hotspots,         # Assuming this is already serializable
             "clusters": self.mission.cluster_centres,  # Assuming this is already serializable
         }
-
         return ret
     
     def route_action_moveto(self) -> Tuple[Dict, int]:

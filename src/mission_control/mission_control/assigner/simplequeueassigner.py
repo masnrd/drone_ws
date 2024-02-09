@@ -1,6 +1,6 @@
 from typing import Dict, List
 
-from drone_utils import DroneMode
+from ..drone_utils import DroneMode
 from .interface import Assigner
 
 # DBScan ClusterFinder

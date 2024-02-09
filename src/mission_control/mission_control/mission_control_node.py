@@ -18,6 +18,9 @@ from .mission_utils import Mission
 logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 COMMAND_CHECK_INTERVAL = 1
+RTT_WEIGHTING = 0.125
+RTT_TIMEOUT_MULTIPLIER = 10    # This, multiplied by RTT, determines the timeout
+MC_HEARTBEAT_INTERVAL = 1      # 1 s
 
 class DroneConnection:
     """
@@ -96,7 +99,7 @@ class MCNode(Node):
         try:
             drone_id, command = self.commands.get(block=False)
             print(f"MISSION CONTROL: User entered command {DroneCommandId(command.command_id).name}")
-            if drone_id not in self.drone_states.keys():
+            if drone_id not in self.connections.keys():
                 print(f"Warning: No such drone ID {drone_id}")
                 return
             self.mc_send_command(drone_id, command)
@@ -167,7 +170,7 @@ def main(args=None):
     # Start rclpy node
     rclpy.init(args=args)
 
-    mc_node = MCNode(drone_states, commands)
+    mc_node = MCNode(LatLon(start_lat, start_lon), drone_states, commands)
     rclpy.spin(mc_node)
 
     mc_node.destroy_node()
