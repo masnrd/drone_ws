@@ -529,7 +529,7 @@ class DroneNode(Node):
         return self.get_clock().now().nanoseconds // 1000
     
     def log(self, msg: str):
-        msg = f"DRONE: {msg}"
+        msg = f"DRONE {self.drone_id}: {msg}"
         self.get_logger().info(msg)
 
     def error(self, msg: str):

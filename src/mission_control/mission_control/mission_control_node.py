@@ -6,6 +6,7 @@ from queue import Queue, Empty
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from typing import Dict, Tuple
+from os import environ
 from .maplib import LatLon
 from .drone_utils import DroneId, DroneConnection, DroneState, DroneCommand, DroneMode, DroneCommandId
 from mc_interface_msgs.msg import Ready
@@ -95,10 +96,16 @@ class MCNode(Node):
         return msg_ack
 
 def main(args=None):
-    drone_states = {
-        DroneId(1): DroneState(1),
-        DroneId(2): DroneState(2),
-    }
+    # Load env vars
+    drone_count = int(environ.get("SIM_DRONE_COUNT", "2"))
+    start_lat, start_lon = float(environ.get("PX4_HOME_LAT", 0.0)), float(environ.get("PX4_HOME_LON", 0.0))
+    
+    # Generate initial state
+    print(f"Using Start Location: ({start_lat}, {start_lon})")
+    print(f"Drone Count: {drone_count}")
+    drone_states = {}
+    for drone_id in range(1, drone_count+1):
+        drone_states[DroneId(drone_id)] = DroneState(drone_id)
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
 
     # Start web server

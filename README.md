@@ -30,13 +30,12 @@ Assuming you have built the project before (under Installation), you can simply 
 - Build Mission Control node: `make build_mc`
 - Test Drone node: `make test_drone`
 - Test Mission Control node: `make test_mc`
+- Build launcher: `make build_launch`
 
-For simulation, you will need the following repositories:
-- PX4-Autopilot
-- MicroXRCEAgent
+For simulation, you will need the following repositories and to have performed the necessary installation steps:
+- [PX4-Autopilot](https://github.com/PX4/PX4-Autopilot)
+- [MicroXRCEAgent](https://github.com/eProsima/Micro-XRCE-DDS-Agent): Installation steps are [here](https://docs.px4.io/main/en/middleware/uxrce_dds.html)
 - [PX4-gazebo-models](https://github.com/PX4/PX4-gazebo-models)
-
-Perform the necessary setup.
 
 In the `PX4-gazebo-models` repository, install the default worlds and models:
 ```bash
@@ -46,80 +45,49 @@ python3 simulation-gazebo
 Next, back in this repository, follow the instructions in [here](./worlds/README.md) to install the custom worlds used for simulation.
 
 ## Usage
-### Initialising the Environment
-If the ROS2 distribution hasn't been initialised before, do so:
+### Setup
+Modify the default settings in `./default_settings.sh` -- for instance, you need to set the path to your PX4-Autopilot directory.
+
+Ensure that your PX4 SITL build exists. This command generates a build for the simulated flight controller.
 ```bash
-source /opt/ros/foxy/setup.bash # or your preferred ROS2 distribution
-```
-
-Initialise the environment with:
-```bash
-source install/local_setup.bash
-```
-- This provides access to the environment hooks for this workspace.
-- This is an overlay on top of the underlying ROS2 environment (having sourced `setup.bash` for the ROS2 distribution earlier)
-
-### SITL Testing
-#### Micro XRCE-DDS Agent
-This is needed to ensure communication works.
-```bash
-MicroXRCEAgent udp4 -p 8888
-```
-
-#### Gazebo Initialisation
-Start the Gazebo simulation and server:
-```bash
-python simulation-gazebo --world [custom world]
-```
-- Currently, we only have the `schfield` option as the custom world, though the default empty world (`default`) is present.
-
-#### Mission Control Initialisation
-For each drone you wish to initialise, add a new entry in the `drone_states` dictionary in line 96 of `mission_control_node`, and run `build_mc` within the `drone_ws` workspace.
-
-Having done the necessary `source` commands, start the Mission Control server.
-```bash
-ros2 run mission_control mission_control_node
-```
-- This will also run the Flask web server on `127.0.0.1:5000`.
-
-#### Drone Initialisation
-For each drone with ID `droneId` to be initialised, start a new terminal.
-- To define the starting latitude and longitude:
-    ```bash
-    export PX4_HOME_LAT=[latitude]
-    export PX4_HOME_LON=[longitude]
-    ```
-	
-##### Flight Controller
-We first need to start the PX4 flight controller simulation. This should be done in the `PX4_Autopilot` workspace.
-
-Generate the PX4 SITL stack if it's not already done so. This only needs to be done once:
-```bash
+# In your PX4-Autopilot directory
 make px4_sitl
 ```
 
-Initialise a single instance of the SITL stack.
+### Running Simulation
+To ensure communication works, start the Micro XRCE-DDS Agent.
 ```bash
-PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 ./build/px4_sitl_default/bin/px4 -i [droneId]
+# In the Micro-XRCE-DDS-Agent directory
+MicroXRCEAgent udp4 -p 8888
 ```
 
-##### ROS2 Node
-
-Initialise the drone ROS2 node on another terminal.
+In a **second** terminal, start the Gazebo server.
 ```bash
-ros2 run drone drone_node --ros-args -p droneId:=[droneId]
+# In the PX4-gazebo-models directory
+python simulation-gazebo --world SUTD_field
 ```
-- The drone node will first connect to the flight controller, then report `READY` to mission control, before consistently updating its status.
-- On the mission control frontend, you should be able to see live updates from each drone.
 
+In **third** terminal, run the Mission Control node. 
+```bash
+# In the drone_ws directory
+source ./install/setup.bash
+source default_settings.sh   # Environment vars like start location, drone count
+ros2 run mission_co)ntrol mission_control_node
+```
 
-### Web Application
-#### Backend
-Currently, two endpoints are provided on the Flask backend.
-- `/api/info`: Returns a dump of the state of every drone connected (just 1 drone for now).
-- `/api/action/search?drone_id=[drone_id]&lat=[latitude]&lon=[longitude]`: Provides a `SEARCH_SECTOR` command to drone `drone_id`, starting at `latitude, longitude`.
-    - It is recommended to choose a latitude and longitude close to the starting point of the drone.
-    - Note that the command is dropped if the drone is not connected to mission control, this is still in progress.
+In a **fourth** terminal, run the launch file, which launches both the necessary simulated flight controllers and the ROS2 drone nodes.
+```bash
+# In the drone_ws directory
+source ./install/setup.bash
+source default_settings.sh   # To ensure environment variables are consistent with mission control
+ros2 launch full_launcher drone_launch.py
+```
+- Warning: Since it takes a while for the flight controller to actually reach the READY state, the drone node may give up connecting before actually connecting. Just restart for now.
 
-#### Frontend
-The frontend can be accessed at `127.0.0.1:5000`. For now, this is simply a table displaying the state of all drones (defined by the `drone_states` dictionary), and polls the `/api/info` endpoint every second.
+You can connect to the web application at `127.0.0.1:5000`.
+- Two endpoints are provided on the Flask backend.
+    - `/api/info`: Returns a dump of the state of every drone connected (just 1 drone for now).
+    - `/api/action/search?drone_id=[drone_id]&lat=[latitude]&lon=[longitude]`: Provides a `SEARCH_SECTOR` command to drone `drone_id`, starting at `latitude, longitude`.
+        - It is recommended to choose a latitude and longitude close to the starting point of the drone.
+        - Note that the command is dropped if the drone is not connected to mission control, this is still in progress.
+- For now, the frontend is simply a table displaying the state of all drones (defined by the `drone_states` dictionary), and polls the `/api/info` endpoint every second.
