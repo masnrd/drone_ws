@@ -1,7 +1,13 @@
-# ROS2 stuff
+# Workspaces
 .vscode/
+.idea/
+venv/
+env/
+
+# ROS2 stuff
 build/
 install/
 log/
 
-# 
+# Python
+__pycache__/
