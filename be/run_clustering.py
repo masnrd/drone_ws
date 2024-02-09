@@ -1,8 +1,8 @@
 import numpy as np
+from typing import List, Dict, Tuple
 
 from clusterfinder.point import Point
 from clusterfinder.clusterfinder import DIANAClusterFinder
-from typing import List, Dict
 
 
 def run_clustering(hotspots_location: List[Dict]):
@@ -31,7 +31,7 @@ def run_clustering(hotspots_location: List[Dict]):
     return all_centres
 
 
-def find_search_centre(cluster: list[Point]) -> tuple:
+def find_search_centre(cluster: List[Point]) -> Tuple[Tuple[float, float], float]:
     """
     Find the geographic center of a cluster of Points and the maximum distance from the centre to a point.
 
@@ -70,26 +70,11 @@ def find_search_centre(cluster: list[Point]) -> tuple:
     central_latitude = np.degrees(central_latitude)
     central_longitude = np.degrees(central_longitude)
 
+    centre_point = Point(-99, (central_latitude, central_longitude))
+
     # Calculate the maximum distance
     max_distance = 0
     for point in cluster:
-        max_distance = max(max_distance, haversine(central_latitude, central_longitude, point.coordinates[0], point.coordinates[1]))
+        max_distance = max(max_distance, point.distance(centre_point))
 
-    centre_point = (central_latitude, central_longitude)
-    return centre_point, max_distance*1000
-
-def haversine(lat1, lon1, lat2, lon2):
-    """
-    Calculate the great circle distance between two points
-    on the earth (specified in decimal degrees).
-    """
-    # Convert decimal degrees to radians
-    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
-
-    # Haversine formula
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-    c = 2 * np.arcsin(np.sqrt(a))
-    r = 6371 # Radius of earth in kilometers. Use 3956 for miles
-    return c * r
+    return centre_point.coordinates, max_distance*1000
