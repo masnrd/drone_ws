@@ -8,25 +8,26 @@ A Flask webserver that:
 - Provides a web client to interact with the API.
     - The web client is provided in the `static` directory provided in the package.
 """
-import logging
+# UNCOMMENT FOR PYTHON3.8
+# from __future__ import annotations
 import json
 from flask import Flask, jsonify, request, send_from_directory, Response
+from flask_cors import CORS
 from typing import Dict, Tuple
 from queue import Queue
 from pathlib import Path
-from assigner.simplequeueassigner import SimpleQueueAssigner
+from ament_index_python import get_package_share_directory
+from .maplib import LatLon
+from .mission_utils import Mission
+from .assigner.simplequeueassigner import SimpleQueueAssigner
+from .run_clustering import run_clustering
+from .drone_utils import DroneState, DroneId
+from .drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
 
-from mission_utils import Mission
-from drone_utils import DroneState, DroneId
-from drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
-from run_clustering import run_clustering
-from maplib import LatLon
-from flask_cors import CORS
 
 class MCWebServer:
-    def __init__(self, mission:Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
-        self.static_dir = Path("frontend")
-        # Flask.logger_name = "listlogger"
+    def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
+        self.static_dir = Path(get_package_share_directory("mission_control")).joinpath("frontend")
         self.app = Flask(
             "Mission Control", 
             static_url_path='',
@@ -50,20 +51,23 @@ class MCWebServer:
         self.app.add_url_rule("/api/setup/start_operation", view_func=self.route_start_operation)
         self.app.after_request(self.add_headers)
 
+    def drone_exists(self, drone_id: DroneId):
+        return drone_id in self.drone_states.keys()
+
     def route_index(self):
         return send_from_directory(self.static_dir, "index.html")
 
     def route_info(self) -> Dict:
         drones = {}
         for drone_id, drone_state in self.drone_states.items():
-            drones[drone_id] = drone_state.toJSON()  # Ensure this method returns a serializable dictionary
+            drones[drone_id] = drone_state.get_dict()
 
         ret = {
             "drones": drones,
-            "hotspots": self.mission.hotspots,  # Assuming this is already serializable
+            "hotspots": self.mission.hotspots,         # Assuming this is already serializable
             "clusters": self.mission.cluster_centres,  # Assuming this is already serializable
         }
-        jsonify(ret)
+
         return ret
     
     def route_action_moveto(self) -> Tuple[Dict, int]:

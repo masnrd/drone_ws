@@ -1,8 +1,8 @@
 import numpy as np
-
-from clusterfinder.point import Point
-from clusterfinder.clusterfinder import DIANAClusterFinder
 from typing import List, Dict
+
+from .clusterfinder.point import Point
+from .clusterfinder.clusterfinder import DIANAClusterFinder
 
 
 def run_clustering(hotspots_location: List[Dict]):

@@ -1,39 +1,49 @@
-import threading
 import logging
+import rclpy
+import threading
 from queue import Queue, Empty
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from typing import Dict, Tuple
-
-from maplib import LatLon
-from drone_utils import DroneId, DroneState, DroneCommand, DroneMode, DroneCommandId
-from mission_control_webserver import MCWebServer
-from fake_drone_system import DroneSystem
-from mission_utils import Mission
+from os import environ
+from .maplib import LatLon
+from .drone_utils import DroneId, DroneConnection, DroneState, DroneCommand, DroneMode, DroneCommandId
+from mc_interface_msgs.msg import Ready
+from mc_interface_msgs.srv import Command, Status
+from .mission_control_webserver import MCWebServer
+from .mission_utils import Mission
 
 logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 COMMAND_CHECK_INTERVAL = 1
-HOME_POSITION = LatLon(1.3399775009363866, 103.96258672159254)
 
+class MCNode(Node):
+    def __init__(self, home_pos: LatLon, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
+        super().__init__("mission_control")
 
-class MCNode:
-    def __init__(self, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
-        self.logger = logging.getLogger("mission_control")
-        self.drone_sys = DroneSystem(drone_states, HOME_POSITION)
-        self.drone_states = drone_states
+        self.qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
 
         # Initialise command queue
-        self.command_loop = threading.Timer(COMMAND_CHECK_INTERVAL, self.check_command_loop)
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
-        self.logger.info("Mission Control initialised.")
+        self.command_loop = self.create_timer(COMMAND_CHECK_INTERVAL, self.check_command_loop)
 
-    def start_node(self):
-        self.command_loop.start()
+        # Initialise drone connections
+        self.connections:Dict[DroneId, DroneConnection] = {}
+        for drone_id, drone_state in drone_states.items():
+            self.connections[drone_id] = DroneConnection(drone_id, drone_state, self)
+        
+        self.get_logger().info("Mission Control initialised.")
 
     def log(self, msg: str):
-        self.logger.info(f"MISSION CONTROL: {msg}")
+        self.get_logger().info(f"MISSION CONTROL: {msg}")
 
     def raise_error(self, msg: str):
-        self.logger.error(f"MISSION CONTROL ERROR: {msg}")
+        self.get_logger().error(f"MISSION CONTROL ERROR: {msg}")
         raise Exception(msg)
     
     def check_command_loop(self):
@@ -47,47 +57,75 @@ class MCNode:
             self.mc_send_command(drone_id, command)
         except Empty:
             pass
-        self.command_loop = threading.Timer(COMMAND_CHECK_INTERVAL, self.check_command_loop)
-        self.command_loop.start()
 
     def mc_send_command(self, drone_id: DroneId, drone_cmd: DroneCommand):
         """ MC sends a Command to a given drone """
-        self.drone_sys.add_command(drone_id, drone_cmd)
+        connection = self.connections[drone_id]
+        command = drone_cmd.generate_command(drone_id)
+
+        connection.state._last_command = drone_cmd
+        connection.pending_cmd_fut = connection.cli_cmd.call_async(command)
+
+    def mc_recv_ready(self, msg: Ready):
+        """ MC receives a READY message from drone """
+        drone_id = DroneId(msg.drone_id)
+        if drone_id not in self.connections.keys():
+            self.raise_error(f"Received READY message from unknown drone with ID {drone_id}")
+            return
+        
+        self.log(f"Drone {drone_id} reports READY")
+
+    def mc_recv_status(self, msg: Status.Request, msg_ack: Status.Response):
+        """ MC receives a STATUS update from a drone """
+        drone_id = DroneId(msg.drone_id)
+        if drone_id not in self.connections.keys():
+            self.raise_error(f"Received STATUS message from unknown drone with ID {drone_id}")
+            return
+        
+        # Update state
+        self.connections[drone_id].update_rtt(msg.last_rtt)
+        state = self.connections[drone_id].state
+        state._position = LatLon(msg.lat, msg.lon)
+        state._mode = DroneMode(msg.drone_mode)
+        state._battery_percentage = msg.battery_percentage
+
+        # Send Response
+        msg_ack.status_timestamp = msg.timestamp
+        msg_ack.drone_id = drone_id
+
+        if state._last_command is not None:
+            msg_ack.last_cmd_id = state._last_command.command_id
+        else:
+            msg_ack.last_cmd_id = -1
+
+        return msg_ack
 
 def main(args=None):
-    mission = Mission()
-    drone_states = {
-        DroneId(69): DroneState(69),
-        DroneId(1): DroneState(1),
-        DroneId(2): DroneState(2),
-        DroneId(3): DroneState(3),
-        DroneId(4): DroneState(4),
-    }
+    # Load env vars
+    drone_count = int(environ.get("SIM_DRONE_COUNT", "2"))
+    start_lat, start_lon = float(environ.get("PX4_HOME_LAT", 0.0)), float(environ.get("PX4_HOME_LON", 0.0))
+
+    # Generate initial state
+    print(f"Using Start Location: ({start_lat}, {start_lon})")
+    print(f"Drone Count: {drone_count}")
+    drone_states = {}
+    for drone_id in range(1, drone_count+1):
+        drone_states[DroneId(drone_id)] = DroneState(drone_id)
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
 
     # Start web server
+    mission = Mission()
     webserver = MCWebServer(mission, drone_states, commands)
     webserver_thread = threading.Thread(target=webserver.run, daemon=True)
     webserver_thread.start()
 
     # Start rclpy node
-    mcnode = MCNode(drone_states, commands)
-    mcnode.start_node()
+    rclpy.init(args=args)
 
-    # Start drones
-    drone_sys = DroneSystem(drone_states, HOME_POSITION)
-    drone_sys.start()
-    drone_sys.connect_drones()
+    mc_node = MCNode(drone_states, commands)
+    rclpy.spin(mc_node)
 
-    try:
-        while True:
-            user_in = input() # nth done here, just to avoid busy waiting
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        print(e)
-    finally:
-        drone_sys.exit.set()
+    mc_node.destroy_node()
 
 
 if __name__ == '__main__':
