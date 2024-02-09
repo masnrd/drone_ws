@@ -1,5 +1,6 @@
 # UNCOMMENT FOR PYTHON3.8
 # from __future__ import annotations
+import logging
 import rclpy
 import threading
 from queue import Queue, Empty
@@ -8,15 +9,61 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from typing import Dict, Tuple
 from os import environ
 from .maplib import LatLon
-from .drone_utils import DroneId, DroneConnection, DroneState, DroneCommand, DroneMode, DroneCommandId
+from .drone_utils import DroneId, DroneState, DroneCommand, DroneMode, DroneCommandId
 from mc_interface_msgs.msg import Ready
 from mc_interface_msgs.srv import Command, Status
 from .mission_control_webserver import MCWebServer
+from .mission_utils import Mission
+
+logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 COMMAND_CHECK_INTERVAL = 1
 
+class DroneConnection:
+    """
+    A connection to a drone. 
+    - The drone state must be initialised by the caller, to allow for it to be passed to various threads.
+    """
+    def __init__(self, drone_id: DroneId, drone_state: DroneState, node: Node):
+        self.state = drone_state
+        self.node = node
+        self.timeout = None
+        self.pending_cmd_fut = None
+        self.sub_ready = node.create_subscription(
+            Ready,
+            f"/mc_{drone_id}/mc/out/ready",
+            node.mc_recv_ready,
+            node.qos_profile,
+        )
+        self.cli_cmd = node.create_client(
+            Command,
+            f"/mc_{drone_id}/mc/srv/cmd",
+        )
+        self.srv_status = node.create_service(
+            Status,
+            f"/mc_{drone_id}/mc/srv/status",
+            node.mc_recv_status,
+        )
+    
+    def update_rtt(self, sample_rtt: float):
+        if self.state._estimated_rtt == 0.0:
+            self.state._estimated_rtt = sample_rtt
+        else:
+            self.estimated_rtt = ((1 - RTT_WEIGHTING) * self.state._estimated_rtt) + (RTT_WEIGHTING * sample_rtt)
+
+        if self.timeout is not None:
+            self.node.destroy_timer(self.timeout)
+
+        timeout_interval = MC_HEARTBEAT_INTERVAL + (self.state._estimated_rtt * RTT_TIMEOUT_MULTIPLIER)
+        self.timeout = self.node.create_timer(timeout_interval, self.disconnected_action)
+
+    def disconnected_action(self):
+        self.node.destroy_timer(self.timeout)
+        self.state._mode = DroneMode.DISCONNECTED
+        print(f"Warning: Drone {self.state._drone_id} disconnected.")
+        
 class MCNode(Node):
-    def __init__(self, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
+    def __init__(self, home_pos: LatLon, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
         super().__init__("mission_control")
 
         self.qos_profile = QoSProfile(
@@ -49,6 +96,9 @@ class MCNode(Node):
         try:
             drone_id, command = self.commands.get(block=False)
             print(f"MISSION CONTROL: User entered command {DroneCommandId(command.command_id).name}")
+            if drone_id not in self.drone_states.keys():
+                print(f"Warning: No such drone ID {drone_id}")
+                return
             self.mc_send_command(drone_id, command)
         except Empty:
             pass
@@ -99,7 +149,7 @@ def main(args=None):
     # Load env vars
     drone_count = int(environ.get("SIM_DRONE_COUNT", "2"))
     start_lat, start_lon = float(environ.get("PX4_HOME_LAT", 0.0)), float(environ.get("PX4_HOME_LON", 0.0))
-    
+
     # Generate initial state
     print(f"Using Start Location: ({start_lat}, {start_lon})")
     print(f"Drone Count: {drone_count}")
@@ -109,7 +159,8 @@ def main(args=None):
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
 
     # Start web server
-    webserver = MCWebServer(drone_states, commands)
+    mission = Mission()
+    webserver = MCWebServer(mission, drone_states, commands)
     webserver_thread = threading.Thread(target=webserver.run, daemon=True)
     webserver_thread.start()
 
@@ -120,6 +171,7 @@ def main(args=None):
     rclpy.spin(mc_node)
 
     mc_node.destroy_node()
+
 
 if __name__ == '__main__':
     main()

@@ -10,17 +10,26 @@ A Flask webserver that:
 """
 # UNCOMMENT FOR PYTHON3.8
 # from __future__ import annotations
-from flask import Flask, request, send_from_directory
-from ament_index_python import get_package_share_directory
+import logging
+import json
+from flask import Flask, jsonify, request, send_from_directory, Response
+from flask_cors import CORS
 from typing import Dict, Tuple
 from queue import Queue
 from pathlib import Path
+from ament_index_python import get_package_share_directory
+from .maplib import LatLon
+from .mission_utils import Mission
+from .assigner.simplequeueassigner import SimpleQueueAssigner
+from .run_clustering import run_clustering
 from .drone_utils import DroneState, DroneId
 from .drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
-from .maplib import LatLon
+
+logging.getLogger("flask_cors").level = logging.ERROR
+logging.getLogger("werkzeug").level = logging.ERROR
 
 class MCWebServer:
-    def __init__(self, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
+    def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
         self.static_dir = Path(get_package_share_directory("mission_control")).joinpath("frontend")
         self.app = Flask(
             "Mission Control", 
@@ -28,13 +37,22 @@ class MCWebServer:
             static_folder=self.static_dir,
             template_folder=self.static_dir,
         )
+        CORS(self.app)
+
+        self.mission = mission
         self.drone_states = drone_states
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
+        self.assigner = SimpleQueueAssigner()
 
         # Set up Endpoints
         self.app.add_url_rule("/", view_func=self.route_index)
         self.app.add_url_rule("/api/info", view_func=self.route_info)
+        self.app.add_url_rule("/api/action/moveto", view_func=self.route_action_moveto)
         self.app.add_url_rule("/api/action/search", view_func=self.route_action_search)
+        self.app.add_url_rule("/api/setup/run_clustering", methods=["POST"], view_func=self.route_run_clustering)
+        self.app.add_url_rule("/api/setup/confirm_clustering", methods=["POST"], view_func=self.route_confirm_clustering)
+        self.app.add_url_rule("/api/setup/start_operation", view_func=self.route_start_operation)
+        self.app.after_request(self.add_headers)
 
     def drone_exists(self, drone_id: DroneId):
         return drone_id in self.drone_states.keys()
@@ -42,23 +60,43 @@ class MCWebServer:
     def route_index(self):
         return send_from_directory(self.static_dir, "index.html")
 
-    def route_info(self) -> Dict[int, str]:
-        ret: Dict[int, str] = {}
+    def route_info(self) -> Dict:
+        drones = {}
         for drone_id, drone_state in self.drone_states.items():
-            ret[drone_id] = drone_state.toJSON()
-        
+            drones[drone_id] = drone_state.get_dict()
+
+        ret = {
+            "drones": drones,
+            "hotspots": self.mission.hotspots,         # Assuming this is already serializable
+            "clusters": self.mission.cluster_centres,  # Assuming this is already serializable
+        }
+
         return ret
     
-    def route_action_search(self) -> Dict[int, str]:
+    def route_action_moveto(self) -> Tuple[Dict, int]:
         drone_id = request.args.get("drone_id", type=int, default=None)
         lat = request.args.get("lat", type=float, default=None)
         lon = request.args.get("lon", type=float, default=None)
 
         if drone_id is None:
             return {"error": "need drone_id"}, 400
+
+        if lat is None or lon is None:
+            return {"error": "need latitude/longitude parameters as float"}, 400
         
-        if not self.drone_exists(drone_id):
-            return {"error": f"no such drone with drone_id {drone_id}"}, 400
+        # Place command in command queue
+        command_tup = (drone_id, DroneCommand_MOVE_TO(LatLon(lat, lon)))
+        self.commands.put_nowait(command_tup)
+        
+        return {}, 200
+    
+    def route_action_search(self) -> Tuple[Dict, int]:
+        drone_id = request.args.get("drone_id", type=int, default=None)
+        lat = request.args.get("lat", type=float, default=None)
+        lon = request.args.get("lon", type=float, default=None)
+
+        if drone_id is None:
+            return {"error": "need drone_id"}, 400
 
         if lat is None or lon is None:
             return {"error": "need latitude/longitude parameters as float"}, 400
@@ -68,10 +106,38 @@ class MCWebServer:
         self.commands.put_nowait(command_tup)
         
         return {}, 200
+
+    def route_run_clustering(self):
+        data = request.form.to_dict()
+        hotspots_location = data.get("hotspots_position", None)
+        hotspots_location = json.loads(hotspots_location)
+        self.mission.hotspots = {i: {"position": hotspots_location[i]["position"]} for i in range(len(hotspots_location))}
+        cluster_centres = run_clustering(hotspots_location)
+        return cluster_centres
     
-    def route_action_moveto(self) -> Dict[int, str]:
-        #TODO
-        return {"error": "not implemented"}, 500
+    def route_confirm_clustering(self) -> bool:
+        """"Update mission clusters centres"""
+        data = request.form.to_dict()
+        confirmed_clusters = json.loads(data.get("clusters", None))
+        self.mission.cluster_centres = confirmed_clusters
+        self.mission.cluster_centres_to_explore += confirmed_clusters
+        return {}, 200
+    
+    def route_start_operation(self):
+        """Run assignment on drones in drone state, cluster centers and command drones to search sector"""
+
+        assignments = self.assigner.fit(self.mission.cluster_centres_to_explore, self.drone_states)
+        for drone_id, cluster in assignments.items():
+            command_tup = (drone_id, DroneCommand_SEARCH_SECTOR(LatLon(cluster["position"]["lat"], cluster["position"]["lng"]), None))
+            self.commands.put_nowait(command_tup)
+        return {}, 200        
+
+    def add_headers(self, response: Response):
+        response.headers.add("Content-Type", "application/json")
+        response.headers.add("Access-Control-Allow-Methods", "PUT, GET ,POST, DELETE, OPTIONS")
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.status = 200
+        return response
     
     def run(self):
         self.app.run(debug=True, use_reloader=False)
