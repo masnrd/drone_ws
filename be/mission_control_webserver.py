@@ -10,6 +10,7 @@ A Flask webserver that:
 """
 # UNCOMMENT FOR PYTHON3.8
 # from __future__ import annotations
+import logging
 import json
 from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
@@ -24,6 +25,8 @@ from .run_clustering import run_clustering
 from .drone_utils import DroneState, DroneId
 from .drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
 
+logging.getLogger("flask_cors").level = logging.ERROR
+logging.getLogger("werkzeug").level = logging.ERROR
 
 class MCWebServer:
     def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
