@@ -37,6 +37,7 @@ Run the setup script, which updates PX4-Autopilot with the necessary files and g
 python3 ./setup_env/setup_env.py
 ```
 - **Note**: This automatically sources the necessary ROS2 `setup.bash` and the local installation `setup.bash` files, so sourcing this is all you need when running ROS2 files later on :)
+- You **may** need to re-run the `ubuntu.sh` setup file in the `PX4-Autopilot/Tools` directory.
 
 Now, build the ROS2 project.
 ```bash
