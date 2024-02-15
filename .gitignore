@@ -11,3 +11,6 @@ log/
 
 # Python
 __pycache__/
+
+# Environment file
+env.sh

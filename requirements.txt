@@ -1,5 +1,5 @@
 h3==3.7.6
 Flask==3.0.1
 flask-cors
-numpy==1.26.0
+numpy>=1.20.3
 pymap3d==3.0.1
