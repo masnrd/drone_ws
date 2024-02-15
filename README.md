@@ -84,7 +84,7 @@ ros2 run mission_control mission_control_node
 
 **Mission Control Frontend**: Finally, in a fifth terminal, run the Mission Control React frontend.
 ```bash
-# In the drone_ws directory
+# In the ./frontend directory
 npm start
 ```
 - You can connect to this at `127.0.0.1:3000`. This opens a map showing the locations of each drone.
