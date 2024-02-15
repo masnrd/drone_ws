@@ -24,7 +24,7 @@ IDLE_MC_PING_MAX = 5        # How many times to prod MC until we log a warning
 # These control how many failed heartbeats is necessary to determine a loss of connection
 FC_CONNECTED_TIMEOUT = 1
 MC_CONNECTED_TIMEOUT = 3
-CONN_FC_TIMEOUT = 15  # After this timeout, drone has failed to connect to flight controller
+CONN_FC_TIMEOUT = 60  # After this timeout, drone has failed to connect to flight controller
 
 # Default constants for the drone
 DEFAULT_DRONE_ID = 69
@@ -212,8 +212,8 @@ class DroneNode(Node):
         ## FC
         self.fc_cycles = None
         self.fc_hb_timer = None  # Timer object to send heartbeats to FC
-        self.battery_percentage = -1
-        self.battery_secondsleft = 0
+        self.battery_percentage = -1.0
+        self.battery_secondsleft = 0.0
         self.fc_armed = False
         self.fc_nav_mode = -1  # 14 if offboard
 
@@ -486,9 +486,9 @@ class DroneNode(Node):
         msg = Status.Request()
         msg.drone_id, msg.drone_mode = self.drone_id, self.drone_state
         msg.timestamp = self.clock_microseconds()
-        msg.last_rtt = self.mc_last_rtt
-        msg.battery_percentage = self.battery_percentage
-        msg.battery_secondsleft = self.battery_secondsleft
+        msg.last_rtt = float(self.mc_last_rtt)
+        msg.battery_percentage = float(self.battery_percentage)
+        msg.battery_secondsleft = float(self.battery_secondsleft)
         if self.cur_latlon is None:
             msg.lat, msg.lon = float('nan'), float('nan')
         else:

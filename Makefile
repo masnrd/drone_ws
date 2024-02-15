@@ -24,3 +24,7 @@ test_mc: $(MC_DEP)
 	colcon test-result --delete-yes
 	colcon test --packages-select mission_control
 	colcon test-result --all --verbose
+
+# Inform user if they run this invalid command
+px4_sitl:
+	@echo "\033[91mPlease run this command in the PX4-Autopilot directory instead.\033[0m"
