@@ -14,7 +14,7 @@ import logging
 import json
 from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from queue import Queue
 from pathlib import Path
 from ament_index_python import get_package_share_directory
@@ -24,12 +24,13 @@ from .assigner.simplequeueassigner import SimpleQueueAssigner
 from .run_clustering import run_clustering
 from .drone_utils import DroneState, DroneId
 from .drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
+from .detection_utils import DetectedEntity
 
 logging.getLogger("flask_cors").level = logging.ERROR
 logging.getLogger("werkzeug").level = logging.ERROR
 
 class MCWebServer:
-    def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
+    def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_entities: Queue[DetectedEntity]):
         self.static_dir = Path(get_package_share_directory("mission_control")).joinpath("frontend")
         self.app = Flask(
             "Mission Control", 
@@ -42,6 +43,8 @@ class MCWebServer:
         self.mission = mission
         self.drone_states = drone_states
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
+        self.detected_entities_queue: Queue[DetectedEntity] = detected_entities  #TODO: consume data in here into detected_entities
+        self.detected_entities: List[DetectedEntity] = []
         self.assigner = SimpleQueueAssigner()
 
         # Set up Endpoints
@@ -65,12 +68,13 @@ class MCWebServer:
         for drone_id, drone_state in self.drone_states.items():
             drones[drone_id] = drone_state.get_dict()
 
-        ret = {
+        return {
             "drones": drones,
-            "hotspots": self.mission.hotspots,         # Assuming this is already serializable
-            "clusters": self.mission.cluster_centres,  # Assuming this is already serializable
+            "hotspots": self.mission.hotspots,
+            "clusters": self.mission.cluster_centres,
+            "clusters_to_explore": self.mission.cluster_centres_to_explore,
+            "detected": [entity.to_dict() for entity in self.detected_entities]
         }
-        return ret
     
     def route_action_moveto(self) -> Tuple[Dict, int]:
         drone_id = request.args.get("drone_id", type=int, default=None)
