@@ -1,6 +1,9 @@
 # masnrd_ws
 
-A ROS workspace for the onboard computer. 
+ROS workspace for the mission control. This allows for:
+- SITL simulation through Gazebo/JMavSim,
+- HITL simulation through Gazebo/JMavSim and connecting to physical flight controllers,
+- Physical running by connecting to physical drones.
 
 ## Installation
 Follow the instructions provided [here](https://docs.px4.io/main/en/ros/ros2_comm.html) to install ROS2, PX4-Autopilot, and the MicroXRCEAgent.
@@ -63,6 +66,8 @@ ros2 run mission_control mission_control_node
 # In the ./frontend directory
 npm start
 ```
+
+For HITL tests, you need to manually connect the flight controller, then run the drone node along with JMavSim.
 
 ## Simulation (SITL)
 ### Setup
