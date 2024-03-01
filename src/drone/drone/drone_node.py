@@ -135,47 +135,46 @@ class DroneNode(Node):
         )
 
         # Initialise publishers, subscribers for this drone
-        self._drone_ns = f"/px4_{drone_id}" if drone_id is not None else ""
         ## Flight Controller
         self.fc_sys_id = None
         self.fc_com_id = None
         self.sub_vehstatus= self.create_subscription(
             VehicleStatus,
-            f"{self._drone_ns}/fmu/out/vehicle_status",
+            f"/fmu/out/vehicle_status",
             self.fc_recv_vehstatus,
             self.qos_profile,
         )
         self.sub_vehglobpos = self.create_subscription(
             VehicleGlobalPosition,
-            f"{self._drone_ns}/fmu/out/vehicle_global_position",
+            f"/fmu/out/vehicle_global_position",
             self.fc_recv_vehglobpos,
             self.qos_profile,
         )
         self.sub_vehlocpos = self.create_subscription(
             VehicleLocalPosition,
-            f"{self._drone_ns}/fmu/out/vehicle_local_position",
+            f"/fmu/out/vehicle_local_position",
             self.fc_recv_vehlocpos,
             self.qos_profile,
         )
         self.sub_batstatus = self.create_subscription(
             BatteryStatus,
-            f"{self._drone_ns}/fmu/out/battery_status",
+            f"/fmu/out/battery_status",
             self.fc_recv_batstatus,
             self.qos_profile,
         )
         self.pub_vehcom = self.create_publisher(
             VehicleCommand,
-            f"{self._drone_ns}/fmu/in/vehicle_command",
+            f"/fmu/in/vehicle_command",
             self.qos_profile,
         )
         self.pub_ocm = self.create_publisher(
             OffboardControlMode,
-            f"{self._drone_ns}/fmu/in/offboard_control_mode",
+            f"/fmu/in/offboard_control_mode",
             self.qos_profile,
         )
         self.pub_trajsp = self.create_publisher(
             TrajectorySetpoint,
-            f"{self._drone_ns}/fmu/in/trajectory_setpoint",
+            f"/fmu/in/trajectory_setpoint",
             self.qos_profile,
         )
         ## Mission Control
