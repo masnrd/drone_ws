@@ -9,7 +9,7 @@ A Flask webserver that:
     - The web client is provided in the `static` directory provided in the package.
 """
 # UNCOMMENT FOR PYTHON3.8
-# from __future__ import annotations
+from __future__ import annotations
 import logging
 import json
 from flask import Flask, jsonify, request, send_from_directory, Response

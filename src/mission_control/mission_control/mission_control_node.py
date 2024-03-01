@@ -1,5 +1,5 @@
 # UNCOMMENT FOR PYTHON3.8
-# from __future__ import annotations
+from __future__ import annotations
 import logging
 import rclpy
 import threading
@@ -15,7 +15,7 @@ from mc_interface_msgs.srv import Command, Status
 from .mission_control_webserver import MCWebServer
 from .mission_utils import Mission
 
-logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 COMMAND_CHECK_INTERVAL = 1
 RTT_WEIGHTING = 0.125
