@@ -150,16 +150,40 @@ class MCNode(Node):
 
 def main(args=None):
     # Load env vars
-    drone_count = int(environ.get("SIM_DRONE_COUNT", "2"))
-    start_lat, start_lon = float(environ.get("PX4_HOME_LAT", 0.0)), float(environ.get("PX4_HOME_LON", 0.0))
-
-    # Generate initial state
-    print(f"Using Start Location: ({start_lat}, {start_lon})")
-    print(f"Drone Count: {drone_count}")
-    drone_states = {}
-    for drone_id in range(1, drone_count+1):
-        drone_states[DroneId(drone_id)] = DroneState(drone_id)
+    try:
+        mc_mode = int(environ.get("MC_MODE", "-1"))
+    except ValueError:
+        mc_mode = -1
+    is_simulated = False
+    if mc_mode == -1:
+        print("Invalid MC_MODE, please run `setup_sim_env.py` or `setup_real_env.py`.")
+        exit(1)
+    elif mc_mode == 0:
+        is_simulated = True
+    elif mc_mode == 1:
+        is_simulated = False
+        
+    # Set up drones
+    drone_states: Dict[DroneId, DroneState] = {}
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
+    if is_simulated:
+        print("Setting up in SITL mode.")
+        drone_count = int(environ.get("SIM_DRONE_COUNT", "2"))
+        start_lat, start_lon = float(environ.get("PX4_HOME_LAT", 0.0)), float(environ.get("PX4_HOME_LON", 0.0))
+
+        print(f"Using Start Location: ({start_lat}, {start_lon})")
+        print(f"Drone Count: {drone_count}")
+
+        for drone_id in range(1, drone_count+1):
+            drone_states[DroneId(drone_id)] = DroneState(drone_id)
+    else:
+        print("Setting up to connect with hardware drones.")
+        start_lat, start_lon = float(environ.get("PX4_HOME_LAT", 0.0)), float(environ.get("PX4_HOME_LON", 0.0))  #TODO: change
+        drone_ids_str = environ.get("DRONE_IDS", "")
+        drone_ids = [DroneId(int(t.strip("[] "))) for t in drone_ids_str.split(",")]
+        for drone_id in drone_ids:
+            drone_states[drone_id] = DroneState(drone_id)
+        
 
     # Start web server
     mission = Mission()
