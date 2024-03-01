@@ -3,7 +3,7 @@ from sys import stderr
 from typing import Dict
 from pathlib import Path
 
-ROS_ROOT = Path("/opt/ros/iron")
+ROS_ROOT = Path("/opt/ros/foxy")
 PROJECT_ROOT = Path(__file__).parent.parent
 ENV_NAME = "env.sh"
 
