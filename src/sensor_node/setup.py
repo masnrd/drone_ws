@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+from pathlib import Path
 
 package_name = 'sensor_node'
 
@@ -10,6 +11,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (f"share/{package_name}/simmaps/", [str(p) for p in Path("simmaps").glob("*.simmap")])
     ],
     install_requires=['setuptools'],
     zip_safe=True,

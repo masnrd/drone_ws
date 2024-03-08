@@ -6,13 +6,12 @@ A simulated sensor must first:
 1. Initialise a SimulationMap, either directly or from a mapfile (.simmap).
 2. Call the `get_signals_at()` method, passing its location in to get the signals at that point.
 """
-
-import pickle
+import struct
 from random import randbytes, uniform
-from maplib import LatLon, PositionXY
 from typing import Dict, List
 from math import log10
 from pathlib import Path
+from .maplib import LatLon, PositionXY
 
 MEASURED_POWER = -30 # RSSI at 1 metre
 ENV_FACTOR = 2.4     # Value between 2 and 4
@@ -72,11 +71,14 @@ class SimulationMap:
             plt.plot(pos.x, pos.y, 'bo')
             plt.annotate(device.mac, (pos.x, pos.y))
         plt.show()
-    
+
     def to_file(self, name: str):
         name += ".simmap"
-        with open(name, 'wb') as f:
-            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+        with open(name, 'wb') as fp:
+            data = struct.pack("!ddddi", self.start_latlon.lat, self.start_latlon.lon, self.max_lat_offset, self.max_lon_offset, len(self.devices))
+            for device in self.devices:
+                data += struct.pack("!35sdd", device.mac.encode("ascii"), device.position.lat, device.position.lon)
+            fp.write(data)
 
     @staticmethod
     def from_file(name: str) -> 'SimulationMap':
@@ -87,13 +89,21 @@ class SimulationMap:
         if not p.is_file():
             print(f"{name} is not a file.")
             exit(1)
-        try:
-            with p.open("rb") as fp:
-                return pickle.load(fp)
-        except Exception as e:
-            print(f"Error: {e}")
-            exit(1)
+        
+        with p.open("rb") as fp:
+            data = fp.read()
+            start_lat, start_lon, max_lat_offset, max_lon_offset, device_count = struct.unpack("!ddddi", data[0:36])
+            start_latlon = LatLon(float(start_lat), float(start_lon))
+            map = SimulationMap(0, start_latlon, max_lat_offset, max_lon_offset)
 
+            iter = 36
+
+            for i in range(device_count):
+                mac_b, pos_lat, pos_lon = struct.unpack("!35sdd", data[iter:iter+51])
+                iter += 51
+                device = Device(mac_b.decode("ascii"), LatLon(float(pos_lat), float(pos_lon)))
+                map.devices.append(device)
+            return map
 
 if __name__ == "__main__":
     from sys import argv
@@ -107,22 +117,18 @@ if __name__ == "__main__":
         map.render()
     elif len(argv) == 4:
         # Generate a map
-        try:
-            device_count = int(argv[1])
-            max_lat_offset = float(argv[2])
-            max_lon_offset = float(argv[3])
+        device_count = int(argv[1])
+        max_lat_offset = float(argv[2])
+        max_lon_offset = float(argv[3])
 
-            # Extract env variables
-            lat = environ.get("PX4_HOME_LAT", DEFAULT_LAT)
-            lon = environ.get("PX4_HOME_LON", DEFAULT_LON)
+        # Extract env variables
+        lat = float(environ.get("PX4_HOME_LAT", DEFAULT_LAT))
+        lon = float(environ.get("PX4_HOME_LON", DEFAULT_LON))
 
-            map = SimulationMap(device_count, LatLon(lat, lon), max_lat_offset, max_lon_offset)
-            filename = datetime.now().strftime(f"{device_count}-%Y%m%d-%H%M%S")
-            map.to_file(filename)
-            print(f"Exported to {filename}.simmap.")
-            map.render()
-        except Exception as e:
-            print(f"Error: {e}")
-            exit(1)
+        map = SimulationMap(device_count, LatLon(lat, lon), max_lat_offset, max_lon_offset)
+        filename = datetime.now().strftime(f"{device_count}-%Y%m%d-%H%M%S")
+        map.to_file(filename)
+        print(f"Exported to {filename}.simmap.")
+        map.render()
     else:
         print("Usage: ./sim_generator [file]: View an existing `.simmap` file.\n       ./sim_generator [device_count] [max_lat_offset] [max_lon_offset]: Generate a new `.simmap` file.")
