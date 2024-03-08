@@ -10,9 +10,8 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rclpy.task import Future
 from .maplib import LatLon
 from .pathfinder import PathfinderState
-from .detection_utils import DetectedEntity
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode, VehicleStatus, BatteryStatus
-from mc_interface_msgs.msg import Ready, Detected
+from mc_interface_msgs.msg import Ready
 from mc_interface_msgs.srv import Command, Status
 
 """ CONSTANTS """
@@ -193,11 +192,6 @@ class DroneNode(Node):
             Ready,
             f"/mc_{drone_id}/mc/out/ready",
             self.qos_profile,
-        )
-        self.pub_mc_detected = self.create_publisher(
-            Detected,
-            f"/mc_{drone_id}/mc/out/detected",
-            self.qos_profile
         )
         self.cli_mc_status = self.create_client(
             Status,
@@ -398,13 +392,6 @@ class DroneNode(Node):
             self.fc_publish_trajectorysetpoint()
 
     def drone_run_search(self):
-        # Random detection
-        #TODO: remove for actual
-        if self.cycles % (10000 / CYCLE_INTERVAL):
-            # Report a detected entity every 10 seconds
-            entity = DetectedEntity(self.drone_id, self.cur_latlon, datetime.now())
-            self.mc_publish_detected(entity)
-
         # Check if we've reached
         reached = (self.tgt_latlon is None) or (self.tgt_latlon.distFromPoint(self.cur_latlon) <= DEFAULT_RCH_THRESH)
         if reached:
@@ -493,11 +480,6 @@ class DroneNode(Node):
         msg = Ready()
         msg.drone_id = self.drone_id
         self.pub_mc_ready.publish(msg)
-
-    def mc_publish_detected(self, entity: DetectedEntity):
-        msg = entity.to_message()
-        self.pub_mc_detected.publish(msg)
-        print(f"Drone {self.drone_id}: Reporting found entity at {entity.coords}")
 
     # --- CLIENTS ---
     def mc_request_status(self) -> Future:
