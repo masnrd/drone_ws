@@ -122,7 +122,10 @@ class MCWebServer:
     def route_delete_hotspot(self):
         data = request.form.to_dict()
         hotspot = json.loads(data.get("hotspot_position", None))
-        self.mission.hotspots.remove((hotspot["latlng"][0], hotspot["latlng"][1]))  # Should be a set here
+        try:
+            self.mission.hotspots.remove((hotspot["latlng"][0], hotspot["latlng"][1]))  # Should be a set here
+        except KeyError:
+            return {}, 404
         return {}, 200
 
     def route_run_clustering(self):

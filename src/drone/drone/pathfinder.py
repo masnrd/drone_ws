@@ -10,7 +10,8 @@ import h3
 import numpy as np
 from enum import IntEnum
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, NewType, Union
+from copy import deepcopy
+from typing import Tuple, Dict, NewType, Union, List
 from .maplib import LatLon
 
 DEFAULT_MAX_STEPS = 30   # Maximum steps for pathfinding
@@ -67,7 +68,32 @@ class PathfinderState:
         self.max_step = 30
         self.step_count = 0
 
+        self.cached_path: List[Union[LatLon, None]] = []
+        self.cache_path(start_pos)
+
+    def cache_path(self, start_pos: LatLon):
+        self.step_count = 0
+        cur_ll = start_pos
+        while cur_ll is not None:
+            self.cached_path.append(cur_ll)
+            cur_ll = self._get_next_waypoint(cur_ll)
+        self.cached_path.append(None)
+        self.step_count = 0
+
     def get_next_waypoint(self, cur_pos: LatLon) -> Union[LatLon, None]:
+        if cur_pos is None:
+            raise RuntimeError("get_next_waypoint: cur_pos is None")
+        
+        for i, pos in enumerate(self.cached_path):
+            if pos is None:
+                return None
+            if pos == cur_pos:
+                return self.cached_path[i+1]
+        raise RuntimeError("get_next_waypoint: Could not find cur_pos in cached path.")
+    # self._get_next_waypoint(cur_pos)
+        
+        
+    def _get_next_waypoint(self, cur_pos: LatLon) -> Union[LatLon, None]:
         if cur_pos is None:
             raise RuntimeError("get_next_waypoint: cur_pos is None")
         self.step_count += 1

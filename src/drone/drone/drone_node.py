@@ -399,8 +399,9 @@ class DroneNode(Node):
             if self.pathfinder is None:
                 self.error("In search mode, but pathfinder is not defined.")
                 return
-            
+            #msg = f"Reached {self.tgt_latlon}"
             self.tgt_latlon = self.pathfinder.get_next_waypoint(self.tgt_latlon)
+            #self.log(f"{msg}, going to {self.tgt_latlon}.")
             if self.tgt_latlon is None:
                 self.idle_cycles = 0
                 self.change_state(DroneState.IDLE, f"Completed search.")
