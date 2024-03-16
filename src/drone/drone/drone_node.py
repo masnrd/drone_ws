@@ -36,8 +36,8 @@ class DroneState(IntEnum):
     """ Current state of the drone """
     INIT    = 0
     CONN_FC = 1  # Drone is connecting to FC (Flight Controller)
-    PREP_FC = 2  # Drone is preparing FC (i.e. arming and taking off)
-    CONN_MC = 3  # Drone is connecting to MC (Mission Control)
+    CONN_MC = 2  # Drone is connecting to MC (Mission Control)
+    TAKEOFF = 3  # Drone is preparing FC (i.e. arming and taking off)
     IDLE    = 4  # Drone is connected, waiting for instructions
     TRAVEL  = 5  # Drone is moving to a position
     SEARCH  = 6  # Drone is searching a sector
@@ -245,10 +245,10 @@ class DroneNode(Node):
             self.drone_run_init()
         elif self.drone_state == DroneState.CONN_FC:
             self.drone_run_conn_fc()
-        elif self.drone_state == DroneState.PREP_FC:
-            self.drone_run_prep_fc()
         elif self.drone_state == DroneState.CONN_MC:
             self.drone_run_conn_mc()
+        elif self.drone_state == DroneState.TAKEOFF:
+            self.drone_run_takeoff()
         elif self.drone_state == DroneState.IDLE:
             self.drone_run_idle()
         elif self.drone_state == DroneState.TRAVEL:
@@ -273,7 +273,7 @@ class DroneNode(Node):
             ## Arm the flight controller
             self.fc_publish_vehiclecommand(VehicleCommand.VEHICLE_CMD_COMPONENT_ARM_DISARM, 1.0)
         else:
-            if self.drone_state in [DroneState.CONN_FC, DroneState.PREP_FC]:
+            if self.drone_state == DroneState.CONN_FC:
                 # Here, we've sent at least a second's worth of messages.
                 # Yet, the drone has NOT been armed (or at least has not sent a positive ACK through VehicleCommandAck)
                 self.error(f"Failed to arm drone after {CONN_FC_TIMEOUT} seconds.")
@@ -335,22 +335,8 @@ class DroneNode(Node):
             self._connfc_check_count += 1
             return
         
-        # Here, we've established ref_pt and can proceed to prepare the FC
-        # self.destroy_subscription(self._connfc_sub_vehlocpos)
-        self.change_state(DroneState.PREP_FC, f"Ref LatLon/Cur LatLon:{self.ref_latlon}/{self.cur_latlon}. System ID/Component Id: {self.fc_sys_id}/{self.fc_com_id}")
-
-    def drone_run_prep_fc(self):
-        """ Initialise FC by ARMING it and taking off """
-        self.fc_cycles = 0
-        if self.fc_hb_timer is None:
-            self.fc_hb_timer = self.create_timer(HB_FC_INTERVAL, self.fc_run)
-
-        # Transition to next state if drone is armed and in the air
-        if self.fc_armed:
-            if self.cur_alt < self.tgt_alt - 1:
-                self.fc_publish_takeoff()
-            else:
-                self.change_state(DroneState.CONN_MC, f"FC prepared, taking off.")
+        # Here, we've established ref_pt and can proceed to connect to MC
+        self.change_state(DroneState.CONN_MC, f"Ref LatLon/Cur LatLon:{self.ref_latlon}/{self.cur_latlon}. System ID/Component Id: {self.fc_sys_id}/{self.fc_com_id}")
 
     def drone_run_conn_mc(self):
         """ Connect to MC """
@@ -360,8 +346,21 @@ class DroneNode(Node):
             self.mc_hb_timer = self.create_timer(HB_MC_INTERVAL, self.mc_run)
 
         if self.mc_connected:
-            self.idle_cycles = 0
-            self.change_state(DroneState.IDLE)
+            self.change_state(DroneState.TAKEOFF)
+
+    def drone_run_takeoff(self):
+        """ Takeoff by ARMING it and taking off """
+        self.fc_cycles = 0
+        if self.fc_hb_timer is None:
+            self.fc_hb_timer = self.create_timer(HB_FC_INTERVAL, self.fc_run)
+
+        # Transition to next state if drone is armed and in the air
+        if self.fc_armed:
+            if self.cur_alt < self.tgt_alt - 1:
+                self.fc_publish_takeoff()
+            else:
+                self.idle_cycles = 0
+                self.change_state(DroneState.IDLE, f"Drone taking off.")
 
     def drone_run_idle(self):
         """ Conduct checks in idle mode """
