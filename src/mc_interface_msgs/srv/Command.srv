@@ -4,3 +4,4 @@ byte[] cmd_data    # Data corresponding to the command in byte form
 ---
 int64 drone_id     # ID of drone
 int32 cmd_id
+byte[] path

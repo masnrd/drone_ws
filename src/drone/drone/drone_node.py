@@ -1,4 +1,4 @@
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, List
 from enum import IntEnum
 import struct
 from math import isnan
@@ -73,6 +73,14 @@ class UnpackedCommand:
             self.args["prob_map"] = None
         elif self.cmd_id == CommandId.MOVE_TO:
             self.next_state = DroneState.IDLE
+
+def serialise_path(pos_ls: List[LatLon]) -> bytes:
+    """ Serialises a list of LatLon points into a bytearray. """
+    ret = b""
+    for pos in pos_ls:
+        if pos is not None:
+            ret += struct.pack("!ff", pos.lat, pos.lon)
+    return ret
 
 """ DRONE ROS2 Node """
 class DroneNode(Node):
@@ -516,13 +524,22 @@ class DroneNode(Node):
         self.cur_command = UnpackedCommand(request)
         self.log(f"Received {self.cur_command.cmd_id.name}.")
         self.tgt_latlon = self.cur_command.dest_pos
+        path: List[LatLon] = [self.cur_latlon]
         
         if self.cur_command.cmd_id == CommandId.SEARCH_SECTOR:
             # Initialise pathfinder
             self.pathfinder = PathfinderState(self.cur_command.dest_pos, self.cur_command.args["prob_map"])
+            for pos in self.pathfinder.cached_path:
+                path.append(pos)
+        else:
+            path.append(self.cur_command.dest_pos)
 
         self.change_state(DroneState.TRAVEL, f"Received new command: {self.cur_command.cmd_id.name}")
-        response.drone_id, response.cmd_id = self.drone_id, request.cmd_id
+
+        # Generate response
+        path_bytes = serialise_path(path)
+
+        response.drone_id, response.cmd_id, response.path = self.drone_id, request.cmd_id, path_bytes
         return response
 
     # Helper Methods

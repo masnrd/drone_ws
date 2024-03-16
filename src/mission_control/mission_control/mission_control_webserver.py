@@ -140,7 +140,7 @@ class MCWebServer:
         for drone_id, cluster in assignments.items():
             command_tup = (drone_id, DroneCommand_SEARCH_SECTOR(LatLon(cluster[0][0], cluster[0][1]), None))
             self.commands.put_nowait(command_tup)
-        return {}, 200        
+        return {}, 200
 
     def add_headers(self, response: Response):
         response.headers.add("Content-Type", "application/json")

@@ -3,10 +3,12 @@
 import logging
 import rclpy
 import threading
+import struct
 from queue import Queue, Empty
+from rclpy import Future
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from os import environ
 from .maplib import LatLon
 from .drone_utils import DroneId, DroneState, DroneCommand, DroneMode, DroneCommandId
@@ -100,14 +102,32 @@ class MCNode(Node):
     def check_command_loop(self):
         """ Loop to check for commands from the webserver """
         try:
+            # Scan for commands from the webserver
             drone_id, command = self.commands.get(block=False)
-            print(f"MISSION CONTROL: User entered command {DroneCommandId(command.command_id).name}")
             if drone_id not in self.connections.keys():
-                print(f"Warning: No such drone ID {drone_id}")
+                self.log(f"Warning: No such drone ID {drone_id}")
                 return
             self.mc_send_command(drone_id, command)
         except Empty:
             pass
+
+        # Scan all drone connections to check for command responses
+        for drone_id, connection in self.connections.items():
+            if connection.pending_cmd_fut is not None:
+                fut: Future = connection.pending_cmd_fut
+                if fut.done():
+                    response: Command.Response = fut.result()
+                    try:
+                        path_b: bytes = b"".join(response.path)
+                        pos_ls: List[Tuple[float, float]] = [struct.unpack("!ff", path_b[i:i+8]) for i in range(0, len(path_b), 8)]
+                        path: Dict[int, Dict[float, float]] = {}
+                        for i, pos in enumerate(pos_ls):
+                            path[i] = {"lat": pos[0], "lon": pos[1]}
+                        connection.state._set_path(path)
+                    except Exception as e:
+                        self.log(f"Error when parsing path bytes from drone {drone_id}: {e}")
+
+                    connection.pending_cmd_fut = None
 
     def mc_send_command(self, drone_id: DroneId, drone_cmd: DroneCommand):
         """ MC sends a Command to a given drone """

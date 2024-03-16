@@ -60,9 +60,9 @@ export default function Map({
                   Mode: {drone.mode}
                 </Popup>
               </Marker>
-              {drone.simulated_path && (
+              {drone.path && (
                 <Polyline
-                  positions={Object.values(drone.simulated_path).map(point => [point.lat, point.lon])}
+                  positions={Object.values(drone.path).map(point => [point.lat, point.lon])}
                   color="red"
                   weight={2}
                   // opacity={0.8}

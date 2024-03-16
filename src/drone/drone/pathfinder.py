@@ -10,7 +10,6 @@ import h3
 import numpy as np
 from enum import IntEnum
 from abc import ABC, abstractmethod
-from copy import deepcopy
 from typing import Tuple, Dict, NewType, Union, List
 from .maplib import LatLon
 
