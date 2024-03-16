@@ -21,8 +21,8 @@ class DroneMode(IntEnum):
     DISCONNECTED = -100
     INIT    = 0
     CONN_FC = 1  # Drone is connecting to FC (Flight Controller)
-    PREP_FC = 2  # Drone is preparing FC (i.e. arming and taking off)
-    CONN_MC = 3  # Drone is connecting to MC (Mission Control)
+    CONN_MC = 2  # Drone is connecting to MC (Mission Control)
+    TAKEOFF = 3  # Drone is taking off
     IDLE    = 4  # Drone is connected, waiting for instructions
     TRAVEL  = 5  # Drone is moving to a position
     SEARCH  = 6  # Drone is searching a sector
