@@ -66,7 +66,7 @@ class DroneConnection:
         print(f"Warning: Drone {self.state._drone_id} disconnected.")
         
 class MCNode(Node):
-    def __init__(self, home_pos: LatLon, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
+    def __init__(self, home_pos: LatLon, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_queue: Queue):
         super().__init__("mission_control")
 
         self.qos_profile = QoSProfile(
@@ -79,6 +79,9 @@ class MCNode(Node):
         # Initialise command queue
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
         self.command_loop = self.create_timer(COMMAND_CHECK_INTERVAL, self.check_command_loop)
+
+        # Initialise detection queue
+        self.detected_queue: Queue = detected_queue
 
         # Initialise drone connections
         self.connections:Dict[DroneId, DroneConnection] = {}
@@ -160,17 +163,18 @@ def main(args=None):
     for drone_id in range(1, drone_count+1):
         drone_states[DroneId(drone_id)] = DroneState(drone_id)
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
+    detected_queue: Queue = Queue()
 
     # Start web server
     mission = Mission()
-    webserver = MCWebServer(mission, drone_states, commands)
+    webserver = MCWebServer(mission, drone_states, commands, detected_queue)
     webserver_thread = threading.Thread(target=webserver.run, daemon=True)
     webserver_thread.start()
 
     # Start rclpy node
     rclpy.init(args=args)
 
-    mc_node = MCNode(LatLon(start_lat, start_lon), drone_states, commands)
+    mc_node = MCNode(LatLon(start_lat, start_lon), drone_states, commands, detected_queue)
     rclpy.spin(mc_node)
 
     mc_node.destroy_node()

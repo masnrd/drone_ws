@@ -29,7 +29,7 @@ logging.getLogger("flask_cors").level = logging.ERROR
 logging.getLogger("werkzeug").level = logging.ERROR
 
 class MCWebServer:
-    def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]]):
+    def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_queue: Queue):
         self.static_dir = Path(get_package_share_directory("mission_control")).joinpath("frontend")
         self.app = Flask(
             "Mission Control", 
@@ -43,14 +43,16 @@ class MCWebServer:
         self.drone_states = drone_states
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
         self.assigner = SimpleQueueAssigner()
+        self.detected_queue = detected_queue
 
         # Set up Endpoints
         self.app.add_url_rule("/", view_func=self.route_index)
         self.app.add_url_rule("/api/info", view_func=self.route_info)
+        self.app.add_url_rule("/hotspot/add", methods=["POST"], view_func=self.route_add_hotspot)
+        self.app.add_url_rule("/hotspot/delete", methods=["POST"], view_func=self.route_delete_hotspot)
         self.app.add_url_rule("/api/action/moveto", view_func=self.route_action_moveto)
         self.app.add_url_rule("/api/action/search", view_func=self.route_action_search)
-        self.app.add_url_rule("/api/setup/run_clustering", methods=["POST"], view_func=self.route_run_clustering)
-        self.app.add_url_rule("/api/setup/confirm_clustering", methods=["POST"], view_func=self.route_confirm_clustering)
+        self.app.add_url_rule("/api/setup/run_clustering", view_func=self.route_run_clustering)
         self.app.add_url_rule("/api/setup/start_operation", view_func=self.route_start_operation)
         self.app.after_request(self.add_headers)
 
@@ -65,10 +67,15 @@ class MCWebServer:
         for drone_id, drone_state in self.drone_states.items():
             drones[drone_id] = drone_state.get_dict()
 
+        while not self.detected_queue.empty():
+            self.mission.detected.append(self.detected_queue.get())
+
         ret = {
             "drones": drones,
-            "hotspots": self.mission.hotspots,         # Assuming this is already serializable
-            "clusters": self.mission.cluster_centres,  # Assuming this is already serializable
+            "hotspots": list(self.mission.hotspots),         # Assuming this is already serializable
+            "clusters": self.mission.cluster_centres,        # Assuming this is already serializable
+            "clusters_to_explore": self.mission.cluster_centres_to_explore,
+            "detected": []  #TODO
         }
         return ret
     
@@ -105,29 +112,30 @@ class MCWebServer:
         self.commands.put_nowait(command_tup)
         
         return {}, 200
-
-    def route_run_clustering(self):
-        data = request.form.to_dict()
-        hotspots_location = data.get("hotspots_position", None)
-        hotspots_location = json.loads(hotspots_location)
-        self.mission.hotspots = {i: {"position": hotspots_location[i]["position"]} for i in range(len(hotspots_location))}
-        cluster_centres = run_clustering(hotspots_location)
-        return cluster_centres
     
-    def route_confirm_clustering(self) -> bool:
-        """"Update mission clusters centres"""
+    def route_add_hotspot(self):
         data = request.form.to_dict()
-        confirmed_clusters = json.loads(data.get("clusters", None))
-        self.mission.cluster_centres = confirmed_clusters
-        self.mission.cluster_centres_to_explore += confirmed_clusters
+        hotspot = json.loads(data.get("hotspot_position", None))
+        self.mission.hotspots.add((hotspot["latlng"]["lat"], hotspot["latlng"]["lng"]))  # Should be a set here
         return {}, 200
     
-    def route_start_operation(self):
-        """Run assignment on drones in drone state, cluster centers and command drones to search sector"""
+    def route_delete_hotspot(self):
+        data = request.form.to_dict()
+        hotspot = json.loads(data.get("hotspot_position", None))
+        self.mission.hotspots.remove((hotspot["latlng"][0], hotspot["latlng"][1]))  # Should be a set here
+        return {}, 200
 
+    def route_run_clustering(self):
+        cluster_centres = run_clustering(self.mission.hotspots)
+        self.mission.cluster_centres = cluster_centres
+        self.mission.cluster_centres_to_explore = [cluster for cluster in cluster_centres.values()]
+        return cluster_centres
+    
+    def route_start_operation(self):
+        """ Run assignment on drones in drone state, cluster centers and command drones to search sector """
         assignments = self.assigner.fit(self.mission.cluster_centres_to_explore, self.drone_states)
         for drone_id, cluster in assignments.items():
-            command_tup = (drone_id, DroneCommand_SEARCH_SECTOR(LatLon(cluster["position"]["lat"], cluster["position"]["lng"]), None))
+            command_tup = (drone_id, DroneCommand_SEARCH_SECTOR(LatLon(cluster[0][0], cluster[0][1]), None))
             self.commands.put_nowait(command_tup)
         return {}, 200        
 

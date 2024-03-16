@@ -78,6 +78,7 @@ class DroneState:
         self._estimated_rtt = 0.0
         self._position: Union[LatLon, None] = None
         self._last_command: Union[DroneCommand, None] = None
+        self.simulated_path = dict()
 
     def get_drone_id(self) -> DroneId:
         return self._drone_id
@@ -98,6 +99,9 @@ class DroneState:
     def get_last_command(self) -> Union[DroneCommand, None]:
         """ Returns the most recent DroneCommand sent to the drone, or None if not set yet. """
         return self._last_command
+    
+    def get_simulated_path(self) -> Dict:
+        return self.simulated_path
 
     def get_dict(self) -> Dict[str, Any]:
         """ Get the dictionary of the drone's values, which can be JSONified. """
@@ -116,6 +120,7 @@ class DroneState:
             "position": {
                 "lat": lat, "lon": lon
             },
+            "simulated_path": self.get_simulated_path(),
             "last_command": command,
         }
         

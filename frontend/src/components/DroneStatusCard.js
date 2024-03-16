@@ -20,8 +20,8 @@ const DroneStatusCard = ({ droneData, map }) => {
     lat = "(Unknown)";
     lon = "(Unknown)";
   } else {
-    lat = lat.toFixed(3);
-    lon = lon.toFixed(3);
+    lat = lat.toFixed(5);
+    lon = lon.toFixed(5);
   }
 
   return (
