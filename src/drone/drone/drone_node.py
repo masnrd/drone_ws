@@ -133,6 +133,7 @@ class DroneNode(Node):
         self.cur_latlon: Union[LatLon, None] = None
         self.tgt_latlon: Union[LatLon, None] = None
         self.ref_latlon: Union[LatLon, None] = None
+        self.home_latlon: Union[LatLon, None] = None
         self.cur_alt, self.tgt_alt = 0.0, 0.0
         self.tgt_dfg = DEFAULT_DIST_FROM_GROUND  # Target distance from ground
         self.qos_profile = QoSProfile(
@@ -336,6 +337,7 @@ class DroneNode(Node):
             return
         
         # Here, we've established ref_pt and can proceed to connect to MC
+        self.home_latlon = self.cur_latlon
         self.change_state(DroneState.CONN_MC, f"Ref LatLon/Cur LatLon:{self.ref_latlon}/{self.cur_latlon}. System ID/Component Id: {self.fc_sys_id}/{self.fc_com_id}")
 
     def drone_run_conn_mc(self):

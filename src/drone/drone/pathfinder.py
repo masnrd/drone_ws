@@ -8,11 +8,13 @@ NOTICE for Pathfinding team:
 """
 import h3
 import numpy as np
+from enum import IntEnum
 from abc import ABC, abstractmethod
 from typing import Tuple, Dict, NewType, Union
 from .maplib import LatLon
 
-DEFAULT_RESOLUTION = 14
+DEFAULT_MAX_STEPS = 30   # Maximum steps for pathfinding
+DEFAULT_RESOLUTION = 14  # Default resolution of H3 map
 N_RINGS_CLUSTER = 16     # Defines the number of rings in a cluster by default
 
 # Probability Map type definition: A dictionary, where each H3 hexagon index is mapped to a specific probability.
@@ -35,25 +37,52 @@ def init_empty_prob_map(centre_pos: LatLon, n_rings: int) -> ProbabilityMap:
     
     return prob_map
 
+def hexdist(a: str, b: str) -> float:
+    """ Computes Vincenty distance between two hexes, where `a` and `b` are H3 indices. """
+    lat1, lon1 = h3.h3_to_geo(a)
+    lat2, lon2 = h3.h3_to_geo(b)
+    ll1 = LatLon(lat1, lon1)
+    ll2 = LatLon(lat2, lon2)
+    return ll1.distFromPoint(ll2)
+
+
+class PathfinderType(IntEnum):
+    SPIRAL = 0
+    BAYESIAN = 1
+
+
 class PathfinderState:
     """ Pathfinding state utilised by the drone. """
-    def __init__(self, start_pos: LatLon, prob_map: ProbabilityMap = None):
+    def __init__(self, start_pos: LatLon, prob_map: ProbabilityMap = None, pathfinder_type: PathfinderType = PathfinderType.SPIRAL):
+        start_tup = (start_pos.lat, start_pos.lon)
+        if pathfinder_type == PathfinderType.SPIRAL:
+            self._pathfinder = OutwardSpiralPathFinder(DEFAULT_RESOLUTION, start_tup)
+        else:
+            raise NotImplementedError("TODO: Port over Bayesian search")
+
         if prob_map is None:
             prob_map = init_empty_prob_map(start_pos, N_RINGS_CLUSTER)
 
-        start_tup = (start_pos.lat, start_pos.lon)
-        self._pathfinder = OutwardSpiralPathFinder(DEFAULT_RESOLUTION, start_tup)  #TODO: to be set by the caller, based on the search method defined by MC
         self._prob_map = prob_map
+        self.max_step = 30
+        self.step_count = 0
 
-    def get_next_waypoint(self, cur_pos: LatLon) -> LatLon:
+    def get_next_waypoint(self, cur_pos: LatLon) -> Union[LatLon, None]:
         if cur_pos is None:
             raise RuntimeError("get_next_waypoint: cur_pos is None")
+        self.step_count += 1
+        if (self.step_count > self.max_step):
+            return None
+
         cur_tup = (cur_pos.lat, cur_pos.lon)
         next_tup = self._pathfinder.find_next_step(cur_tup, self._prob_map)
+        if next_tup is None:
+            return None
         return LatLon(next_tup[0], next_tup[1])
     
     def found_signals(self, cur_pos: LatLon, signal_count: int):
         pass
+
 
 class PathFinder(ABC):
     def __init__(self, res: int, centre: Tuple[float, float]):
@@ -98,7 +127,7 @@ class OutwardSpiralPathFinder(PathFinder):
         return current_ij_coord
 
     # Implementation of abstract method that returns next waypoint
-    def find_next_step(self, current_position: Tuple[float, float], prob_map: Dict) -> Tuple[float, float]:
+    def find_next_step(self, current_position: Tuple[float, float], prob_map: ProbabilityMap) -> Tuple[float, float]:
         current_position_ij = h3.experimental_h3_to_local_ij(self.centre_hex, h3.geo_to_h3(
             current_position[0], current_position[1], resolution=self.res))
 
