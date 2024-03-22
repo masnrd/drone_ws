@@ -167,27 +167,12 @@ const Sidebar = ({
     <div
       id={id || "leaflet-sidebar"}
       className={`sidebar leaflet-touch${positionClass}${collapsedClass}`}
-      ref={rootElement}
-    >
+      ref={rootElement}>
       <div className="sidebar-tabs">
         <ul role="tablist">
           {topTabs.map((t) => (
             <MenuButton
-              key={t.props.id}
-              id={t.props.id}
-              icon={t.props.icon}
-              disabled={t.props.disabled}
-              selected={selected}
-              collapsed={collapsed}
-              onClose={handleClose}
-              onOpen={handleOpen}
-              map={map || null}
-            />
-          ))}
-        </ul>
-        <ul role="tablist">
-          {bottomTabs.map((t) => (
-            <MenuButton
+              className={`sidebar-menu-item`}
               key={t.props.id}
               id={t.props.id}
               icon={t.props.icon}

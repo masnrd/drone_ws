@@ -24,7 +24,7 @@ const Tab = ({
 
   return (
     <div id={id} className={`sidebar-pane${activeClass}`}>
-      <h1 className="sidebar-header">
+      <div className="sidebar-header">
         {header}
         <div
           className="sidebar-close"
@@ -33,7 +33,7 @@ const Tab = ({
         >
           <CloseIconSelector closeIcon={closeIcon} position={position} />
         </div>
-      </h1>
+      </div>
       {children}
     </div>
   );
