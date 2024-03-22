@@ -1,5 +1,7 @@
 import React from "react";
 import { PropTypes } from "prop-types";
+import Tooltip from "@mui/material/Tooltip";
+import "./sidebar.scss";
 
 const MenuButton = (props) => {
   const icon =
@@ -27,10 +29,15 @@ const MenuButton = (props) => {
       <button
         className="sidebar-tab-button"
         role="tab"
-        onClick={(e) => onClick(e, props.id)}
-      >
-        {" "}
-        {icon}
+        onClick={(e) => onClick(e, props.id)}>
+        <Tooltip
+          title={props.id}
+          placement="right-start"
+          PopperProps={{
+            style: { zIndex: 100 + "!important", position: "relative" },
+          }}>
+          {icon}
+        </Tooltip>
       </button>
     </li>
   );

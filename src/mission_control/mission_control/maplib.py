@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pymap3d import ned2geodetic, geodetic2ned
 from pymap3d.ellipsoid import Ellipsoid
 from pymap3d.vincenty import vdist
+from typing import Dict
 
 EARTH_RADIUS = 6378.137 * 1000 # Earth's radius in metres
 DEFAULT_ALTITUDE = 5.0 #TODO: have the px4 report the current altitude for more accurate computation
@@ -27,6 +28,9 @@ class LatLon:
         """ Converts from WGS84 coordinates (lat, lon) to a position vector relative to a reference point (x, y, refPt). """
         ned = geodetic2ned(self.lat, self.lon, DEFAULT_ALTITUDE, refPt.lat, refPt.lon, DEFAULT_ALTITUDE, ell=ELLIPSOID)
         return PositionXY(ned[0], ned[1], refPt)
+    
+    def to_dict(self) -> Dict[str, float]:
+        return {"lat": self.lat, "lon": self.lon}
     
     def __repr__(self) -> str:
         return f"({self.lat}, {self.lon})"

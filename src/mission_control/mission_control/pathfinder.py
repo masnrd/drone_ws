@@ -1,19 +1,16 @@
 """
 pathfinder:
-Pathfinding algorithm for the drone
-
-NOTICE for Pathfinding team:
-- I renamed all instances of 'center' to 'centre', and 'centre_hexagon' to 'centre_hex'
-- Currently, `None` is passed to `prob_map`, so an error could occur if the code relies on it.
+Pathfinding algorithm to simulate drone movement for the mission control
 """
 import h3
 import numpy as np
 from enum import IntEnum
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, NewType, Union, List
+from typing import Tuple, Dict, NewType, Union
+from copy import deepcopy
 from .maplib import LatLon
 
-DEFAULT_MAX_STEPS = 300   # Maximum steps for pathfinding
+DEFAULT_MAX_STEPS = 30   # Maximum steps for pathfinding
 DEFAULT_RESOLUTION = 14  # Default resolution of H3 map
 N_RINGS_CLUSTER = 16     # Defines the number of rings in a cluster by default
 
@@ -64,35 +61,11 @@ class PathfinderState:
             prob_map = init_empty_prob_map(start_pos, N_RINGS_CLUSTER)
 
         self._prob_map = prob_map
-        self.max_step = DEFAULT_MAX_STEPS
+        self.max_step = 30
         self.step_count = 0
-
-        self.cached_path: List[Union[LatLon, None]] = []
-        self.cache_path(start_pos)
-
-    def cache_path(self, start_pos: LatLon):
-        self.step_count = 0
-        cur_ll = start_pos
-        while cur_ll is not None:
-            self.cached_path.append(cur_ll)
-            cur_ll = self._get_next_waypoint(cur_ll)
-        self.cached_path.append(None)
-        self.step_count = 0
+        self.simulated_path = self.get_simulated_path(start_pos)
 
     def get_next_waypoint(self, cur_pos: LatLon) -> Union[LatLon, None]:
-        if cur_pos is None:
-            raise RuntimeError("get_next_waypoint: cur_pos is None")
-        
-        for i, pos in enumerate(self.cached_path):
-            if pos is None:
-                return None
-            if pos == cur_pos:
-                return self.cached_path[i+1]
-        raise RuntimeError("get_next_waypoint: Could not find cur_pos in cached path.")
-    # self._get_next_waypoint(cur_pos)
-        
-        
-    def _get_next_waypoint(self, cur_pos: LatLon) -> Union[LatLon, None]:
         if cur_pos is None:
             raise RuntimeError("get_next_waypoint: cur_pos is None")
         self.step_count += 1
@@ -104,6 +77,20 @@ class PathfinderState:
         if next_tup is None:
             return None
         return LatLon(next_tup[0], next_tup[1])
+    
+    def get_simulated_path(self, cur_pos: LatLon) -> Dict[int, Dict]:
+        sim_map = deepcopy(self._prob_map)
+        step = 0
+        simulated_path = dict()
+
+        while step < self.max_step:
+            cur_tup = (cur_pos.lat, cur_pos.lon)
+            next_tup = self._pathfinder.find_next_step(cur_tup, sim_map)
+            cur_pos = LatLon(next_tup[0], next_tup[1])
+            simulated_path[step] = cur_pos.to_dict()
+            step += 1
+        
+        return simulated_path
     
     def found_signals(self, cur_pos: LatLon, signal_count: int):
         pass

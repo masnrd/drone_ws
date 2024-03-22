@@ -3,10 +3,12 @@
 import logging
 import rclpy
 import threading
+import struct
 from queue import Queue, Empty
+from rclpy import Future
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from os import environ
 from .maplib import LatLon
 from .drone_utils import DroneId, DroneState, DroneCommand, DroneMode, DroneCommandId
@@ -73,7 +75,7 @@ class DroneConnection:
         print(f"Warning: Drone {self.state._drone_id} disconnected.")
         
 class MCNode(Node):
-    def __init__(self, home_pos: LatLon, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_entities: Queue[DetectedEntity]):
+    def __init__(self, home_pos: LatLon, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_queue: Queue[DetectedEntity]):
         super().__init__("mission_control")
 
         self.qos_profile = QoSProfile(
@@ -88,7 +90,7 @@ class MCNode(Node):
         self.command_loop = self.create_timer(COMMAND_CHECK_INTERVAL, self.check_command_loop)
 
         # Initialise detectedentity queue
-        self.detected_entities: Queue[DetectedEntity] = detected_entities
+        self.detected_queue: Queue[DetectedEntity] = detected_queue
 
         # Initialise drone connections
         self.connections:Dict[DroneId, DroneConnection] = {}
@@ -107,14 +109,32 @@ class MCNode(Node):
     def check_command_loop(self):
         """ Loop to check for commands from the webserver """
         try:
+            # Scan for commands from the webserver
             drone_id, command = self.commands.get(block=False)
-            print(f"MISSION CONTROL: User entered command {DroneCommandId(command.command_id).name}")
             if drone_id not in self.connections.keys():
-                print(f"Warning: No such drone ID {drone_id}")
+                self.log(f"Warning: No such drone ID {drone_id}")
                 return
             self.mc_send_command(drone_id, command)
         except Empty:
             pass
+
+        # Scan all drone connections to check for command responses
+        for drone_id, connection in self.connections.items():
+            if connection.pending_cmd_fut is not None:
+                fut: Future = connection.pending_cmd_fut
+                if fut.done():
+                    response: Command.Response = fut.result()
+                    try:
+                        path_b: bytes = b"".join(response.path)
+                        pos_ls: List[Tuple[float, float]] = [struct.unpack("!ff", path_b[i:i+8]) for i in range(0, len(path_b), 8)]
+                        path: Dict[int, Dict[float, float]] = {}
+                        for i, pos in enumerate(pos_ls):
+                            path[i] = {"lat": pos[0], "lon": pos[1]}
+                        connection.state._set_path(path)
+                    except Exception as e:
+                        self.log(f"Error when parsing path bytes from drone {drone_id}: {e}")
+
+                    connection.pending_cmd_fut = None
 
     def mc_send_command(self, drone_id: DroneId, drone_cmd: DroneCommand):
         """ MC sends a Command to a given drone """
@@ -177,18 +197,18 @@ def main(args=None):
     for drone_id in range(1, drone_count+1):
         drone_states[DroneId(drone_id)] = DroneState(drone_id)
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
-    detected_entities: Queue[DetectedEntity] = Queue()
+    detected_queue: Queue[DetectedEntity] = Queue()
 
     # Start web server
     mission = Mission()
-    webserver = MCWebServer(mission, drone_states, commands, detected_entities)
+    webserver = MCWebServer(mission, drone_states, commands, detected_queue)
     webserver_thread = threading.Thread(target=webserver.run, daemon=True)
     webserver_thread.start()
 
     # Start rclpy node
     rclpy.init(args=args)
 
-    mc_node = MCNode(LatLon(start_lat, start_lon), drone_states, commands, detected_entities)
+    mc_node = MCNode(LatLon(start_lat, start_lon), drone_states, commands, detected_queue)
     rclpy.spin(mc_node)
 
     mc_node.destroy_node()

@@ -14,8 +14,9 @@
   top: 0;
   bottom: 0;
   width: 100%;
+  max-height: 100%;
   overflow: inherit;
-  z-index: 2000;
+  z-index: 100;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
 }
 
@@ -149,7 +150,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.95);
+  background-color: rgba(228, 228, 228, 0.95);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -173,7 +174,7 @@
   left: 0;
   right: 0;
   box-sizing: border-box;
-  padding: 10px 20px;
+  // padding: 10px 20px;
 }
 
 .sidebar-pane.active {
@@ -181,11 +182,10 @@
 }
 
 .sidebar-header {
-  margin: -10px -20px 0;
-  height: 40px;
-  padding: 0 20px;
-  line-height: 40px;
-  font-size: 22pt;
+  height: 38px;
+  padding: 0 12px 15px;
+  line-height: 70px;
+  font-size: 20pt;
   color: #000000;
   // background-color: #0074d9;
 }
@@ -284,6 +284,7 @@
 .sidebar-tabs > ul > li > button {
   background-color: transparent;
   border: none;
+  padding: 8px;
 }
 
 /* Rehomed controls css, if props.rehomeControls is true */

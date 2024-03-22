@@ -5,7 +5,7 @@ Utilities for interacting with the drones.
 import struct
 from enum import IntEnum
 from rclpy.node import Node
-from typing import Union, NewType, Dict, Any
+from typing import Union, NewType, Dict, Any, List
 from mc_interface_msgs.srv import Command, Status
 from mc_interface_msgs.msg import Ready
 from .maplib import LatLon
@@ -21,8 +21,8 @@ class DroneMode(IntEnum):
     DISCONNECTED = -100
     INIT    = 0
     CONN_FC = 1  # Drone is connecting to FC (Flight Controller)
-    PREP_FC = 2  # Drone is preparing FC (i.e. arming and taking off)
-    CONN_MC = 3  # Drone is connecting to MC (Mission Control)
+    CONN_MC = 2  # Drone is connecting to MC (Mission Control)
+    TAKEOFF = 3  # Drone is taking off
     IDLE    = 4  # Drone is connected, waiting for instructions
     TRAVEL  = 5  # Drone is moving to a position
     SEARCH  = 6  # Drone is searching a sector
@@ -78,6 +78,7 @@ class DroneState:
         self._estimated_rtt = 0.0
         self._position: Union[LatLon, None] = None
         self._last_command: Union[DroneCommand, None] = None
+        self._path: Dict[int, Dict[float, float]] = {}
 
     def get_drone_id(self) -> DroneId:
         return self._drone_id
@@ -98,6 +99,12 @@ class DroneState:
     def get_last_command(self) -> Union[DroneCommand, None]:
         """ Returns the most recent DroneCommand sent to the drone, or None if not set yet. """
         return self._last_command
+    
+    def get_path(self) -> Dict[int, Dict[float, float]]:
+        return self._path
+    
+    def _set_path(self, new_path: Dict[int, Dict[float, float]]):
+        self._path = new_path
 
     def get_dict(self) -> Dict[str, Any]:
         """ Get the dictionary of the drone's values, which can be JSONified. """
@@ -116,6 +123,7 @@ class DroneState:
             "position": {
                 "lat": lat, "lon": lon
             },
+            "path": self.get_path(),
             "last_command": command,
         }
         

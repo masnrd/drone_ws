@@ -24,12 +24,9 @@ class SimpleQueueAssigner(Assigner):
         for drone_id, drone_state in drone_states.items():
             if drone_state not in [DroneMode.DISCONNECTED]: # TODO: Update based on all the conditions that do not allow for assignment
                 available_drones.add(drone_id)
-
-        for i in range(len(cluster_centres_to_explore)):
-            if len(available_drones) > 0:
-                available_drone_id = available_drones.pop()
-                assignment[available_drone_id] = cluster_centres_to_explore[i]
-            else:
-                break
+        
+        while len(cluster_centres_to_explore) > 0 and len(available_drones) > 0:
+            available_drone_id = available_drones.pop()
+            assignment[available_drone_id] = cluster_centres_to_explore.pop()
         return assignment
 

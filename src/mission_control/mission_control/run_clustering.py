@@ -1,13 +1,12 @@
 import numpy as np
-from typing import List, Dict, Tuple
+from typing import List, Set, Tuple
 
 from .clusterfinder.point import Point
 from .clusterfinder.clusterfinder import DIANAClusterFinder
 
 
-def run_clustering(hotspots_location: List[Dict]):
-    hotspots = [(entry["position"]["lat"], entry["position"]["lng"]) for entry in hotspots_location]
-    hotspots = [Point(i, hotspots[i]) for i in range(len(hotspots))]
+def run_clustering(hotspots_location: Set[Tuple]):
+    hotspots = [Point(id, h) for id, h in enumerate(hotspots_location)]
 
     # Find clusters
     cluster_finder = DIANAClusterFinder(hotspots, threshold=0.1)
