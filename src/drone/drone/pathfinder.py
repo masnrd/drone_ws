@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Dict, NewType, Union, List
 from .maplib import LatLon
 
-DEFAULT_MAX_STEPS = 30   # Maximum steps for pathfinding
+DEFAULT_MAX_STEPS = 300   # Maximum steps for pathfinding
 DEFAULT_RESOLUTION = 14  # Default resolution of H3 map
 N_RINGS_CLUSTER = 16     # Defines the number of rings in a cluster by default
 
@@ -64,7 +64,7 @@ class PathfinderState:
             prob_map = init_empty_prob_map(start_pos, N_RINGS_CLUSTER)
 
         self._prob_map = prob_map
-        self.max_step = 30
+        self.max_step = DEFAULT_MAX_STEPS
         self.step_count = 0
 
         self.cached_path: List[Union[LatLon, None]] = []
