@@ -1,0 +1,7 @@
+float64 lat
+float64 lon
+---
+int64 timestamp         # Timestamp in microseconds
+float64 lat
+float64 lon
+bool detected
