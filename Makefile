@@ -1,5 +1,6 @@
 DRONE_DEP = $(wildcard src/drone/drone/*.py)
 MC_DEP = $(wildcard src/mission_control/mission_control/*.py)
+SENSOR_DEP = $(wildcard src/sensor_node/sensor_node/*.py)
 LAUNCH_DEP = $(wildcard src/full_launcher/full_launcher/*.py)
 
 build_launch: $(LAUNCH_DEP)
@@ -8,6 +9,9 @@ build_launch: $(LAUNCH_DEP)
 # Builds drone node for ROS 2
 build_drone: $(DRONE_DEP)
 	colcon build --packages-select drone
+
+build_sensor: $(SENSOR_DEP)
+	colcon build --packages-select sensor_node
 
 # Builds mission control node for ROS 2
 build_mc: $(MC_DEP)

@@ -11,7 +11,7 @@ def deterministic_xy(drone_id: int, min: float, max: float) -> Tuple[float, floa
     random.seed(drone_id); random.seed(random.getrandbits(16))
     return (random.uniform(min, max), random.uniform(min, max))
 
-def generate_drone(fc_sitl_build_path: Path, drone_id: int, home_lat: float, home_lon: float, rel_x: float, rel_y: float) -> Tuple[launch.LaunchDescriptionEntity, launch_ros.actions.Node]:
+def generate_drone(fc_sitl_build_path: Path, drone_id: int, home_lat: float, home_lon: float, rel_x: float, rel_y: float) -> Tuple[launch.LaunchDescriptionEntity, launch_ros.actions.Node, launch_ros.actions.Node]:
     fc = launch.actions.ExecuteProcess(
         cmd=[
             "PX4_SYS_AUTOSTART=4001",
@@ -27,14 +27,24 @@ def generate_drone(fc_sitl_build_path: Path, drone_id: int, home_lat: float, hom
         shell=True
     )
     obc = launch_ros.actions.Node(
-            namespace=f"mc_{drone_id}",
-            package="drone",
-            executable="drone_node",
-            ros_arguments=[
-                "-p", f"droneId:={str(drone_id)}"
-            ]
-        )
-    return (fc, obc)
+        namespace=f"mc_{drone_id}",
+        package="drone",
+        executable="drone_node",
+        ros_arguments=[
+            "-p", f"droneId:={str(drone_id)}"
+        ]
+    )
+    
+    sensor_node = launch_ros.actions.Node(
+        namespace=f"mc_{drone_id}",
+        package="sensor_node",
+        executable="sensor_node",
+        ros_arguments=[
+            "-p", f"droneId:={str(drone_id)}"
+        ]
+    )
+
+    return (fc, obc, sensor_node)
 
 def generate_launch_description():
     # Load env vars
@@ -64,5 +74,6 @@ def generate_launch_description():
         drone_tup = generate_drone(fc_sitl_build_path, drone_id, start_lat, start_lon, rel_x, rel_y)
         launch_entities.append(drone_tup[0])
         launch_entities.append(drone_tup[1])
+        launch_entities.append(drone_tup[2])
 
     return launch.LaunchDescription(launch_entities)

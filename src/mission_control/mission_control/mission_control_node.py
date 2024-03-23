@@ -12,10 +12,11 @@ from typing import Dict, Tuple, List
 from os import environ
 from .maplib import LatLon
 from .drone_utils import DroneId, DroneState, DroneCommand, DroneMode, DroneCommandId
-from mc_interface_msgs.msg import Ready
+from mc_interface_msgs.msg import Ready, Detected
 from mc_interface_msgs.srv import Command, Status
 from .mission_control_webserver import MCWebServer
 from .mission_utils import Mission
+from .detection_utils import DetectedEntity
 
 logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
@@ -38,6 +39,12 @@ class DroneConnection:
             Ready,
             f"/mc_{drone_id}/mc/out/ready",
             node.mc_recv_ready,
+            node.qos_profile,
+        )
+        self.sub_detected = node.create_subscription(
+            Detected,
+            f"/mc_{drone_id}/mc/out/detected",
+            node.mc_recv_detected,
             node.qos_profile,
         )
         self.cli_cmd = node.create_client(
@@ -68,7 +75,7 @@ class DroneConnection:
         print(f"Warning: Drone {self.state._drone_id} disconnected.")
         
 class MCNode(Node):
-    def __init__(self, home_pos: LatLon, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_queue: Queue):
+    def __init__(self, home_pos: LatLon, drone_states: Dict[DroneId, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_queue: Queue[DetectedEntity]):
         super().__init__("mission_control")
 
         self.qos_profile = QoSProfile(
@@ -82,8 +89,8 @@ class MCNode(Node):
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
         self.command_loop = self.create_timer(COMMAND_CHECK_INTERVAL, self.check_command_loop)
 
-        # Initialise detection queue
-        self.detected_queue: Queue = detected_queue
+        # Initialise detectedentity queue
+        self.detected_queue: Queue[DetectedEntity] = detected_queue
 
         # Initialise drone connections
         self.connections:Dict[DroneId, DroneConnection] = {}
@@ -146,6 +153,13 @@ class MCNode(Node):
         
         self.log(f"Drone {drone_id} reports READY")
 
+    def mc_recv_detected(self, msg: Detected):
+        """ MC receives a DETECTED message from drone """
+        entity = DetectedEntity.from_message(msg)
+        self.detected_queue.put(entity)
+        
+        self.log(f"Drone {entity.drone_id} reports DETECTED at ({entity.coords.lat}, {entity.coords.lon})")
+
     def mc_recv_status(self, msg: Status.Request, msg_ack: Status.Response):
         """ MC receives a STATUS update from a drone """
         drone_id = DroneId(msg.drone_id)
@@ -183,7 +197,7 @@ def main(args=None):
     for drone_id in range(1, drone_count+1):
         drone_states[DroneId(drone_id)] = DroneState(drone_id)
     commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
-    detected_queue: Queue = Queue()
+    detected_queue: Queue[DetectedEntity] = Queue()
 
     # Start web server
     mission = Mission()

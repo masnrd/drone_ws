@@ -14,7 +14,7 @@ import logging
 import json
 from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from queue import Queue
 from pathlib import Path
 from ament_index_python import get_package_share_directory
@@ -24,12 +24,13 @@ from .assigner.simplequeueassigner import SimpleQueueAssigner
 from .run_clustering import run_clustering
 from .drone_utils import DroneState, DroneId
 from .drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
+from .detection_utils import DetectedEntity
 
 logging.getLogger("flask_cors").level = logging.ERROR
 logging.getLogger("werkzeug").level = logging.ERROR
 
 class MCWebServer:
-    def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_queue: Queue):
+    def __init__(self, mission: Mission, drone_states: Dict[int, DroneState], commands: Queue[Tuple[DroneId, DroneCommand]], detected_queue: Queue[DetectedEntity]):
         self.static_dir = Path(get_package_share_directory("mission_control")).joinpath("frontend")
         self.app = Flask(
             "Mission Control", 
@@ -42,8 +43,8 @@ class MCWebServer:
         self.mission = mission
         self.drone_states = drone_states
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
+        self.detected_queue: Queue[DetectedEntity] = detected_queue
         self.assigner = SimpleQueueAssigner()
-        self.detected_queue = detected_queue
 
         # Set up Endpoints
         self.app.add_url_rule("/", view_func=self.route_index)
@@ -75,7 +76,7 @@ class MCWebServer:
             "hotspots": list(self.mission.hotspots),         # Assuming this is already serializable
             "clusters": self.mission.cluster_centres,        # Assuming this is already serializable
             "clusters_to_explore": self.mission.cluster_centres_to_explore,
-            "detected": []  #TODO
+            "detected": [entity.to_dict() for entity in self.mission.detected]
         }
         return ret
     

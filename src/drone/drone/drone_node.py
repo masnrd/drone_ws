@@ -10,14 +10,16 @@ from rclpy.task import Future
 from .maplib import LatLon
 from .pathfinder import PathfinderState
 from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode, VehicleStatus, BatteryStatus
-from mc_interface_msgs.msg import Ready
+from mc_interface_msgs.msg import Ready, Detected
 from mc_interface_msgs.srv import Command, Status
+from sensor_interface_msgs.srv import ScanRequest
 
 """ CONSTANTS """
 # Intervals
 CYCLE_INTERVAL = 0.1
 HB_FC_INTERVAL = 0.1
 HB_MC_INTERVAL = 0.1
+SENSOR_CHECK_INTERVAL = 0.5 # How often to check the sensor's status
 IDLE_MC_PING_INTERVAL = 30  # How long to spend in IDLE state before prodding MC
 IDLE_MC_PING_MAX = 5        # How many times to prod MC until we log a warning
 
@@ -201,14 +203,24 @@ class DroneNode(Node):
             f"/mc_{drone_id}/mc/out/ready",
             self.qos_profile,
         )
+        self.pub_mc_detected = self.create_publisher(
+            Detected,
+            f"/mc_{drone_id}/mc/out/detected",
+            self.qos_profile,
+        )
         self.cli_mc_status = self.create_client(
             Status,
-            f"/mc_{drone_id}/mc/srv/status",
+            f"/mc_{drone_id}/mc/srv/status"
         )
         self.srv_mc_cmd = self.create_service(
             Command,
             f"/mc_{drone_id}/mc/srv/cmd",
             self.mc_handle_command,
+        )
+        ## Sensor
+        self.cli_sensor_scan = self.create_client(
+            ScanRequest,
+            f"/sensor_{drone_id}/srv/scan"
         )
 
         # Cycle Information
@@ -234,6 +246,10 @@ class DroneNode(Node):
         self.mc_last_rtt = 0.0
         self.mc_last_cmd_id = -1
         self._mc_prev_fut: Union[Future, None] = None
+
+        ## Sensor
+        self.sensor_scan_timer = self.create_timer(SENSOR_CHECK_INTERVAL, self.drone_request_scan)
+        self._sensor_prev_fut: Union[Future, None] = None
 
     # State Management
     def change_state(self, new_state: DroneState, msg: str = ""):
@@ -424,6 +440,32 @@ class DroneNode(Node):
             self.log("Landed. Exiting offboard mode.")
             exit(0)
 
+    def drone_request_scan(self):
+        # Get result of previous scan
+        scan_done = False
+
+        if self._sensor_prev_fut is None:
+            scan_done = True
+        else:
+            if self._sensor_prev_fut.done():
+                # Parse the result
+                detection_msg: ScanRequest.Response = self._sensor_prev_fut.result()
+                if detection_msg.detected:
+                    self.log("Sensor: FOUND")
+                    det_latlon = LatLon(detection_msg.lat, detection_msg.lon)
+                    det_ts = detection_msg.timestamp
+                    self.mc_publish_detected(det_latlon, det_ts)
+                else:
+                    self.log("Sensor: NOT FOUND")
+                scan_done = True
+            else:
+                scan_done = False
+
+        if scan_done:
+            self._sensor_prev_fut = self.sensor_request_scan()
+            if self._sensor_prev_fut is not None:
+                self.log("Sensor: SCAN")
+
     # ROS2 functions
     ## Subscriptions
     def fc_recv_vehstatus(self, msg: VehicleStatus):
@@ -490,6 +532,15 @@ class DroneNode(Node):
         msg.drone_id = self.drone_id
         self.pub_mc_ready.publish(msg)
 
+    def mc_publish_detected(self, coords: LatLon, timestamp: int):
+        msg = Detected()
+        msg.drone_id = self.drone_id
+        msg.lat = coords.lat
+        msg.lon = coords.lon
+        msg.timestamp = timestamp
+        self.pub_mc_detected.publish(msg)
+        print(f"Drone {self.drone_id}: Reporting found entity at {coords} at {timestamp}")
+
     # --- CLIENTS ---
     def mc_request_status(self) -> Future:
         # Note: This is sending the drone's current status as a request, not sending a status request
@@ -517,6 +568,14 @@ class DroneNode(Node):
 
         #TODO: should we check last command ID?
     
+    def sensor_request_scan(self) -> Future:
+        if self.cur_latlon is None:
+            return None
+        msg = ScanRequest.Request()
+        msg.lat = self.cur_latlon.lat
+        msg.lon = self.cur_latlon.lon
+        return self.cli_sensor_scan.call_async(msg)
+
     # --- SERVICES ---
     def mc_handle_command(self, request: Command.Request, response: Command.Response):
         self.mc_last_cmd_id = request.cmd_id
