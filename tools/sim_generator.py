@@ -1,5 +1,6 @@
 """
 sim_generator:
+Generates a simulation for the sensors.
 
 A simulated sensor must first:
 1. Initialise a SimulationMap, either directly or from a mapfile (.simmap).
@@ -10,12 +11,22 @@ from random import randbytes, uniform
 from typing import Dict, List
 from math import log10
 from pathlib import Path
-from .maplib import LatLon, PositionXY
+from maplib import LatLon, PositionXY
 
 MEASURED_POWER = -30 # RSSI at 1 metre
 ENV_FACTOR = 2.4     # Value between 2 and 4
 DEFAULT_LAT = 0.0
 DEFAULT_LON = 0.0
+
+SIM_MAP_DIR = None
+if Path.cwd().stem != "drone_ws":
+    if Path.cwd().parent.stem == "drone_ws":
+        SIM_MAP_DIR = Path.cwd().parent.joinpath("src/sensor_node/simmaps")
+    else:
+        print("Could not locate project root.")
+        exit(1)
+else:
+    SIM_MAP_DIR = Path.cwd().joinpath("src/sensor_node/simmaps")
 
 def random_mac_address() -> str:
     return ':'.join([hex(b)[2:] for b in randbytes(12)])
@@ -73,8 +84,8 @@ class SimulationMap:
         plt.show()
 
     def to_file(self, name: str):
-        name += ".simmap"
-        with open(name, 'wb') as fp:
+        p = SIM_MAP_DIR.joinpath(name + ".simmap")
+        with p.open("wb") as fp:
             data = struct.pack("!ddddi", self.start_latlon.lat, self.start_latlon.lon, self.max_lat_offset, self.max_lon_offset, len(self.devices))
             for device in self.devices:
                 data += struct.pack("!35sdd", device.mac.encode("ascii"), device.position.lat, device.position.lon)
@@ -82,7 +93,7 @@ class SimulationMap:
 
     @staticmethod
     def from_file(name: str) -> 'SimulationMap':
-        p = Path(name)
+        p = SIM_MAP_DIR.joinpath(name)
         if p.suffix != ".simmap":
             print("Expected a `.simmap` file.")
             exit(1)
@@ -104,3 +115,31 @@ class SimulationMap:
                 device = Device(mac_b.decode("ascii"), LatLon(float(pos_lat), float(pos_lon)))
                 map.devices.append(device)
             return map
+
+if __name__ == "__main__":
+    from sys import argv
+    from os import environ
+    from datetime import datetime
+
+    map = None
+    if len(argv) == 2:
+        # Import from file
+        map = SimulationMap.from_file(argv[1])
+        map.render()
+    elif len(argv) == 4:
+        # Generate a map
+        device_count = int(argv[1])
+        max_lat_offset = float(argv[2])
+        max_lon_offset = float(argv[3])
+
+        # Extract env variables
+        lat = float(environ.get("PX4_HOME_LAT", DEFAULT_LAT))
+        lon = float(environ.get("PX4_HOME_LON", DEFAULT_LON))
+
+        map = SimulationMap(device_count, LatLon(lat, lon), max_lat_offset, max_lon_offset)
+        filename = datetime.now().strftime(f"{device_count}-%Y%m%d-%H%M%S")
+        map.to_file(filename)
+        print(f"Exported to {filename}.simmap.")
+        map.render()
+    else:
+        print("Usage: ./sim_generator [file]: View an existing `.simmap` file.\n       ./sim_generator [device_count] [max_lat_offset] [max_lon_offset]: Generate a new `.simmap` file.")

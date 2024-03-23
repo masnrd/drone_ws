@@ -3,8 +3,17 @@ from sys import stderr
 from typing import Dict
 from pathlib import Path
 
+PROJECT_ROOT = None
+if Path.cwd().stem != "drone_ws":
+    if Path.cwd().parent.stem == "drone_ws":
+        PROJECT_ROOT = Path.cwd().parent
+    else:
+        print("Could not locate project root.")
+        exit(1)
+else:
+    PROJECT_ROOT = Path.cwd()
+
 ROS_ROOT = Path("/opt/ros")
-PROJECT_ROOT = Path(__file__).parent.parent
 ENV_NAME = "env.sh"
 DEFAULT_COORDS = {
     "latitude": 1.3410943577604117,
