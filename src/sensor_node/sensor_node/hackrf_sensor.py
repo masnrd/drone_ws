@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from time import sleep
-from pathlib import Path
 from .maplib import LatLon
 from .sim_generator import SimulationMap
 
@@ -9,7 +8,7 @@ SCAN_INTERVAL = 0.5   # The minimal interval between scans
 
 class SensorModule(ABC):
     @abstractmethod
-    def scan(self, channel: int, time_frame: float, threshold: int) -> bool:
+    def scan(self, channel: int = 8, time_frame: float = 2, threshold: int = 0) -> bool:
         """
         Abstract method to scan for signals within a given time frame and threshold.
 
@@ -31,16 +30,20 @@ class SimulatedSensorModule(SensorModule):
     def _update_position(self, new_pos: LatLon):
         self._curpos = new_pos
 
-    def scan(self, channel: int, time_frame: float, threshold: int) -> bool:
-        scans = max(1, time_frame // SCAN_INTERVAL)
+    def scan(self, channel: int = 8, time_frame: float = 2, threshold: int = 0) -> bool:
+        scans = int(max(1, time_frame // SCAN_INTERVAL))
         detected = False
         for i in range(scans):
             if not detected:
                 if self._curpos is not None:
                     signals = self._simmap.get_signals_at(self._curpos)
-                    for rssi in signals.items():
+                    for device_mac, rssi in signals.items():
                         if detected:
                             break
+                        try:
+                            rssi = float(rssi)
+                        except ValueError:
+                            continue
                         if rssi > RSSI_THRESHOLD:
                             detected = True
             sleep(SCAN_INTERVAL)
