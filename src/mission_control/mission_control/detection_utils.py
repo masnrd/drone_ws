@@ -1,11 +1,10 @@
 from typing import Dict
 from datetime import datetime
 from mc_interface_msgs.msg import Detected
-from .drone_utils import DroneId
 from .maplib import LatLon
 
 class DetectedEntity:
-    def __init__(self, drone_id: DroneId, coords: LatLon, time_found: datetime):
+    def __init__(self, drone_id: int, coords: LatLon, time_found: datetime):
         self.drone_id = drone_id
         self.coords = coords
         self.time_found = time_found
@@ -17,15 +16,16 @@ class DetectedEntity:
                 "lat": self.coords.lat,
                 "lon": self.coords.lon,
             },
-            "time_found": {self.time_found.isoformat()}
+            "time_found": self.time_found.isoformat()
         }
     
     @staticmethod
     def from_message(detected_msg: Detected) -> 'DetectedEntity':
         """ Converts from a ROS2 MC Detected message into a DetectedEntity instance """
-        drone_id = DroneId(detected_msg.drone_id)
+        drone_id = detected_msg.drone_id
         coords = LatLon(detected_msg.lat, detected_msg.lon)
-        time_found = datetime.fromtimestamp(detected_msg.timestamp)
+        timestamp = detected_msg.timestamp / (1000 * 1000)   # since timestamp is in MICROseconds
+        time_found = datetime.fromtimestamp(timestamp)
 
         return DetectedEntity(drone_id, coords, time_found)
     
@@ -34,5 +34,11 @@ class DetectedEntity:
         drone_id = int(self.drone_id)
         lat = float(self.coords.lat)
         lon = float(self.coords.lon)
-        timestamp = int(self.time_found.timestamp())
-        return Detected(drone_id, lat, lon, timestamp)
+        timestamp = self.time_found.timestamp() * (1000 * 1000)
+
+        msg = Detected()
+        msg.drone_id = drone_id
+        msg.lat = lat
+        msg.lon = lon
+        msg.timestamp = timestamp
+        return msg

@@ -156,7 +156,7 @@ class MCNode(Node):
     def mc_recv_detected(self, msg: Detected):
         """ MC receives a DETECTED message from drone """
         entity = DetectedEntity.from_message(msg)
-        self.detected_entities.put(entity)
+        self.detected_queue.put(entity)
         
         self.log(f"Drone {entity.drone_id} reports DETECTED at ({entity.coords.lat}, {entity.coords.lon})")
 

@@ -43,10 +43,8 @@ class MCWebServer:
         self.mission = mission
         self.drone_states = drone_states
         self.commands: Queue[Tuple[DroneId, DroneCommand]] = commands
-        self.detected_entities_queue: Queue[DetectedEntity] = detected_queue
-        self.detected_entities: List[DetectedEntity] = []
+        self.detected_queue: Queue[DetectedEntity] = detected_queue
         self.assigner = SimpleQueueAssigner()
-        self.detected_queue = detected_queue
 
         # Set up Endpoints
         self.app.add_url_rule("/", view_func=self.route_index)
@@ -78,7 +76,7 @@ class MCWebServer:
             "hotspots": list(self.mission.hotspots),         # Assuming this is already serializable
             "clusters": self.mission.cluster_centres,        # Assuming this is already serializable
             "clusters_to_explore": self.mission.cluster_centres_to_explore,
-            "detected": [entity.to_dict() for entity in self.detected_queue]
+            "detected": [entity.to_dict() for entity in self.mission.detected]
         }
         return ret
     
