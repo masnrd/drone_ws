@@ -35,7 +35,7 @@ CONN_FC_TIMEOUT = 60  # After this timeout, drone has failed to connect to fligh
 
 # Default constants for the drone
 DEFAULT_DRONE_ID = 69
-DEFAULT_DIST_FROM_GROUND = 5
+DEFAULT_DIST_FROM_GROUND = 7.0
 DEFAULT_RCH_THRESH = 1  # Distance in metres from a point to consider it 'reached'.
 DEFAULT_LANDED_THRESH = 0.5  # Distance in metres for dfg, for drone to be "landed".
 
