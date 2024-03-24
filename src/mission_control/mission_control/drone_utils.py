@@ -19,19 +19,23 @@ ProbabilityMap = NewType("ProbabilityMap", Dict[str, float])
 class DroneMode(IntEnum):
     """ Current mode reported by the drone """
     DISCONNECTED = -100
-    INIT    = 0
-    CONN_FC = 1  # Drone is connecting to FC (Flight Controller)
-    CONN_MC = 2  # Drone is connecting to MC (Mission Control)
-    TAKEOFF = 3  # Drone is taking off
-    IDLE    = 4  # Drone is connected, waiting for instructions
-    TRAVEL  = 5  # Drone is moving to a position
-    SEARCH  = 6  # Drone is searching a sector
-    EXIT    = 7  # Drone is landing and ending its state.
+    INIT     = 0
+    CONN_GRD = 1   # Drone is connecting to FC/MC, and is on the ground
+    IDLE_GRD = 2   # Drone is connected, and on the ground.
+    TAKEOFF  = 3   # Drone is taking off
+    LANDING  = 4
+    CONN_AIR = 5   # Drone is connecting to MC, and in the air. (This is so the drone doesn't just try to land upon disconnects)
+    IDLE_AIR = 6   # Drone is connected, and in the air.
+    TRAVEL   = 7   # Drone is moving to a position
+    SEARCH   = 8   # Drone is searching a sector
+    EXIT     = 9    # Drone is landing and ending its state.
 
 class DroneCommandId(IntEnum):
-    RTB           = 0  # Force RTB. No further commands will be accepted.
-    SEARCH_SECTOR = 1
-    MOVE_TO       = 2  # Go to a specific lat/lon.
+    RTB           = 0  # RTB(): Force RTB. No further commands will be accepted.
+    SEARCH_SECTOR = 1  # SEARCH_SECTOR(start, prob_map): Searches a specific sector
+    MOVE_TO       = 2  # MOVE_TO(pos): Go to a specific lat/lon.
+    LAND          = 3  # LAND(): Land the drone
+    DISCONNECT    = 4  # DISCONNECT(): Disconnect the drone from flight controller and exit.
 
 class DroneCommand:
     """ Interface for a command """
@@ -63,6 +67,14 @@ class DroneCommand_MOVE_TO(DroneCommand):
         command_data = struct.pack("!ff", tgt_pos.lat, tgt_pos.lon)
         super().__init__(DroneCommandId.MOVE_TO, command_data)
 
+class DroneCommand_LAND(DroneCommand):
+    def __init__(self):
+        super().__init__(DroneCommandId.LAND, b"")
+
+class DroneCommand_DISCONNECT(DroneCommand):
+    def __init__(self):
+        super().__init__(DroneCommandId.DISCONNECT, b"")
+
 
 class DroneState:
     """
@@ -79,6 +91,7 @@ class DroneState:
         self._position: Union[LatLon, None] = None
         self._last_command: Union[DroneCommand, None] = None
         self._path: Dict[int, Dict[float, float]] = {}
+        self.is_connected = False
 
     def get_drone_id(self) -> DroneId:
         return self._drone_id

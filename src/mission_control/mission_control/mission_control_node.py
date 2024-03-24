@@ -72,6 +72,7 @@ class DroneConnection:
     def disconnected_action(self):
         self.node.destroy_timer(self.timeout)
         self.state._mode = DroneMode.DISCONNECTED
+        self.state.is_connected = False
         print(f"Warning: Drone {self.state._drone_id} disconnected.")
         
 class MCNode(Node):
@@ -166,6 +167,9 @@ class MCNode(Node):
         if drone_id not in self.connections.keys():
             self.raise_error(f"Received STATUS message from unknown drone with ID {drone_id}")
             return
+        if not self.connections[drone_id].state.is_connected:
+            self.log(f"Drone {drone_id} connected.")
+            self.connections[drone_id].state.is_connected = True
         
         # Update state
         self.connections[drone_id].update_rtt(msg.last_rtt)

@@ -23,7 +23,7 @@ from .mission_utils import Mission
 from .assigner.simplequeueassigner import SimpleQueueAssigner
 from .run_clustering import run_clustering
 from .drone_utils import DroneState, DroneId
-from .drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO
+from .drone_utils import DroneCommand, DroneCommand_SEARCH_SECTOR, DroneCommand_RTB, DroneCommand_MOVE_TO, DroneCommand_LAND, DroneCommand_DISCONNECT
 from .detection_utils import DetectedEntity
 
 logging.getLogger("flask_cors").level = logging.ERROR
@@ -53,6 +53,9 @@ class MCWebServer:
         self.app.add_url_rule("/hotspot/delete", methods=["POST"], view_func=self.route_delete_hotspot)
         self.app.add_url_rule("/api/action/moveto", view_func=self.route_action_moveto)
         self.app.add_url_rule("/api/action/search", view_func=self.route_action_search)
+        self.app.add_url_rule("/api/action/rtb", view_func=self.route_action_rtb)
+        self.app.add_url_rule("/api/action/land", view_func=self.route_action_land)
+        self.app.add_url_rule("/api/action/disconnect", view_func=self.route_action_disconnect)
         self.app.add_url_rule("/api/setup/run_clustering", view_func=self.route_run_clustering)
         self.app.add_url_rule("/api/setup/start_operation", view_func=self.route_start_operation)
         self.app.after_request(self.add_headers)
@@ -110,6 +113,47 @@ class MCWebServer:
         
         # Place command in command queue
         command_tup = (drone_id, DroneCommand_SEARCH_SECTOR(LatLon(lat, lon), None))
+        self.commands.put_nowait(command_tup)
+        
+        return {}, 200
+    
+    def route_action_rtb(self) -> Tuple[Dict, int]:
+        drone_id = request.args.get("drone_id", type=int, default=None)
+        lat = request.args.get("lat", type=float, default=None)
+        lon = request.args.get("lon", type=float, default=None)
+
+        if drone_id is None:
+            return {"error": "need drone_id"}, 400
+
+        if lat is None or lon is None:
+            return {"error": "need latitude/longitude parameters as float"}, 400
+        
+        # Place command in command queue
+        command_tup = (drone_id, DroneCommand_RTB(LatLon(lat, lon), None))
+        self.commands.put_nowait(command_tup)
+        
+        return {}, 200
+    
+    def route_action_land(self) -> Tuple[Dict, int]:
+        drone_id = request.args.get("drone_id", type=int, default=None)
+
+        if drone_id is None:
+            return {"error": "need drone_id"}, 400
+        
+        # Place command in command queue
+        command_tup = (drone_id, DroneCommand_LAND())
+        self.commands.put_nowait(command_tup)
+        
+        return {}, 200
+    
+    def route_action_disconnect(self) -> Tuple[Dict, int]:
+        drone_id = request.args.get("drone_id", type=int, default=None)
+
+        if drone_id is None:
+            return {"error": "need drone_id"}, 400
+        
+        # Place command in command queue
+        command_tup = (drone_id, DroneCommand_DISCONNECT())
         self.commands.put_nowait(command_tup)
         
         return {}, 200

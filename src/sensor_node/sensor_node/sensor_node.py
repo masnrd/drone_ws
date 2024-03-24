@@ -7,7 +7,7 @@ from sensor_interface_msgs.srv import ScanRequest
 from .maplib import LatLon
 from .hackrf_sensor import SimulatedSensorModule
 
-SENSOR_MAPFILENAME = "60_devices_in_SUTD_field.simmap"
+SENSOR_MAPFILENAME = "empty_map.simmap"
 SENSOR_MAPFILE = Path(get_package_share_directory("sensor_node")).joinpath("simmaps").joinpath(SENSOR_MAPFILENAME)
 SENSOR_SCAN_TIMEFRAME = 2  # How long to scan for
 
