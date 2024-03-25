@@ -30,8 +30,8 @@ def generate_drone(fc_sitl_build_path: Path, drone_id: int, home_lat: float, hom
         namespace=f"mc_{drone_id}",
         package="drone",
         executable="drone_node",
-        ros_arguments=[
-            "-p", f"droneId:={str(drone_id)}"
+        arguments=[
+            "--ros-args", "-p", f"droneId:={str(drone_id)}"
         ]
     )
     
@@ -39,8 +39,8 @@ def generate_drone(fc_sitl_build_path: Path, drone_id: int, home_lat: float, hom
         namespace=f"mc_{drone_id}",
         package="sensor_node",
         executable="sensor_node",
-        ros_arguments=[
-            "-p", f"droneId:={str(drone_id)}"
+        arguments=[
+            "--ros-args", "-p", f"droneId:={str(drone_id)}"
         ]
     )
 
