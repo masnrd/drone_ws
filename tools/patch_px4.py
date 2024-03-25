@@ -4,52 +4,6 @@ from lib import *
 APP = "patch_px4"
 
 def patch_px4_autopilot(proj_root: Path, px4_autopilot_path: Path):
-    state = f"[{APP}: PX4 Patch: Downgrade PX4-Autopilot]"
-    # Revert PX4-Autopilot
-    make_result = subprocess.run(["make", "clean"], cwd=px4_autopilot_path)
-    if make_result.returncode != 0:
-        error(state, f"Error in running `make clean` in {px4_autopilot_path}. Ensure you have actually pulled the PX4-Autopilot repository. Error: {make_result.stderr}")
-    subprocess.run(["make", "distclean"], cwd=px4_autopilot_path)
-
-    git_result = subprocess.run(["git", "fetch", "origin", "release/1.14"], cwd=px4_autopilot_path)
-    if git_result.returncode != 0:
-        error(state, f"Error in running `git fetch origin release/1.14` in {px4_autopilot_path}. Ensure you have actually pulled the PX4-Autopilot repository. Error: {git_result.stderr}")
-    checkout_result = subprocess.run(["git", "checkout", "release/1.14"], cwd=px4_autopilot_path)
-    if checkout_result.returncode != 0:
-        error(state, f"Error in running `git checkout release/1.14` in {px4_autopilot_path}. : {checkout_result.stderr}")
-        print(f"[{px4_autopilot_path}] Error in running `git checkout release/1.14`: {checkout_result.stderr}")
-        exit(1)
-    subprocess.run(["make", "submodulesclean"], cwd=px4_autopilot_path)
-    report(state, "PX4-Autopilot successfully set to release/1.14.")
-
-    # Patch .simulator file
-    state = f"[{APP}: PX4 Patch: Patch simulator file]"
-    target_dir = px4_autopilot_path.joinpath("ROMFS").joinpath("px4fmu_common").joinpath("init.d-posix")
-    old_simulator_file = target_dir.joinpath("px4-rc.simulator")
-    new_simulator_file = proj_root.joinpath("tools").joinpath("px4-rc.simulator")
-    if not target_dir.is_dir():
-        error(state, f"Could not find directory in path {old_simulator_file}. Please ensure you've successfully downloaded the PX4-Autopilot directory, otherwise inform Ryan of this error.")
-    if not new_simulator_file.is_file():
-        error(state, f"Could not find px4-rc.simulator file in path {new_simulator_file}. Please inform Ryan of this error.")
-
-    ## Attempt to remove px4-rc.simulator
-    try:
-        old_simulator_file.unlink(missing_ok=True)
-    except PermissionError:
-        error(state, f"No permissions to remove {old_simulator_file}")
-
-    ## Attempt to add the new version of the simulator file
-    try:
-        old_simulator_file.touch()
-        with old_simulator_file.open("w") as dst:
-            with new_simulator_file.open("r") as src:
-                dst.write(src.read())
-    except PermissionError:
-        error(state, f"No permissions to write from {new_simulator_file} to {old_simulator_file}")
-    except Exception as e:
-        error(state, f"Error when writing from {new_simulator_file} to {old_simulator_file}: {e}")
-    report(state, "PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/px4-rc.simulator patched.")
-
     # Patch px4-msgs
     state = f"[{APP}: PX4 Patch: Downgrade px4_msgs]"
     px4_msgs_path = proj_root.joinpath("src").joinpath("px4_msgs")
