@@ -4,7 +4,6 @@ from collections import deque
 import struct
 from math import isnan
 import rclpy
-from rclpy.exceptions import ParameterUninitializedException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.task import Future
@@ -104,18 +103,10 @@ class DroneNode(Node):
         super().__init__("drone")
 
         # Obtain drone ID
-        ## For ROS2 Iron
-        try:
-            self.declare_parameter("droneId", rclpy.Parameter.Type.INTEGER)
-            drone_id = self.get_parameter("droneId").get_parameter_value().integer_value
-        except ParameterUninitializedException:
+        self.declare_parameter("droneId", -1)
+        drone_id = self.get_parameter("droneId").get_parameter_value().integer_value
+        if drone_id == -1:
             drone_id = None
-
-        # ## For ROS2 Foxy
-        # self.declare_parameter("droneId", -1)
-        # drone_id = self.get_parameter("droneId").get_parameter_value().integer_value
-        # if drone_id == -1:
-        #     drone_id = None
 
         # Initialise drone node
         self.drone_state = DroneState.INIT
