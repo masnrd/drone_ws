@@ -190,9 +190,63 @@ class MCNode(Node):
         return msg_ack
 
 def main(args=None):
-    # Load env vars
-    drone_count = int(environ.get("SIM_DRONE_COUNT", "2"))
-    start_lat, start_lon = float(environ.get("PX4_HOME_LAT", 0.0)), float(environ.get("PX4_HOME_LON", 0.0))
+    # Identify if Mission Control should be started in simulated or real mode.
+    is_simulated = True
+    try:
+        mc_mode = int(environ.get("MC_MODE", "-1"))
+    except ValueError:
+        mc_mode = -1
+
+    if mc_mode == 0:
+        is_simulated = True
+    elif mc_mode == 1:
+        is_simulated = False
+    else:
+        print("Invalid MC_MODE, please run: `setup_sim_env.py` or `setup_real_env.py`")
+        exit(1)
+
+    # Setup Drones
+    drone_states: Dict[DroneId, DroneState] = {}
+    commands = Queue[Tuple[DroneId, DroneCommand]] = Queue()
+
+    if is_simulated:
+        print("Setting up in SITL mode.")
+
+        drone_count = environ.get("SIM_DRONE_COUNT", None)
+        start_lat, start_lon = environ.get("PX4_HOME_LAT", None), environ.get("PX4_HOME_LON", None)
+        
+        if drone_count is None or start_lat is None or start_lon is None:
+            print("Could not identify simulated drone, please run `setup_sim_env.py`")
+            exit(1)
+        
+        try:
+            drone_count = int(drone_count)
+            start_lat, start_lon = float(start_lat), float(start_lon)
+        except ValueError:
+            print("Invalid number given as environment variable SIM_DRONE_COUNT, PX4_HOME_LAT, or PX4_HOME_LON. Please run `setup_sim_env.py` again.")
+            exit(1)
+
+        for drone_id in range(1, drone_count+1):
+            drone_states[DroneId(drone_id)] = DroneState(drone_id)
+    else:
+        print("Setting up to connect with hardware drones.")
+
+        drone_ids_str = environ.get("DRONE_IDS", None)
+        start_lat, start_lon = environ.get("PX4_HOME_LAT", None), environ.get("PX4_HOME_LON", None)
+        
+        if drone_ids_str is None or start_lat is None or start_lon is None:
+            print("Could not identify simulated drone, please run `setup_sim_env.py`")
+            exit(1)
+        
+        try:
+            drone_ids = [DroneId(int(t.strip("[] "))) for t in drone_ids_str.split(",")]
+            start_lat, start_lon = float(start_lat), float(start_lon)
+        except Exception:
+            print("Invalid number given as environment variable DRONE_IDS, PX4_HOME_LAT, or PX4_HOME_LON. Please run `setup_real_env.py` again.")
+            exit(1)
+
+        for drone_id in drone_ids:
+            drone_states[drone_id] = DroneState(drone_id)
 
     # Generate initial state
     print(f"Using Start Location: ({start_lat}, {start_lon})")
