@@ -632,6 +632,7 @@ class DroneNode(Node):
             dest_latlon = LatLon(dest_coords[0], dest_coords[1])
 
             # Add instructions
+            self.instr_queue.append(Instruction(InstructionId.STOP, self.cur_latlon))  # Interrupt previous instruction
             self.instr_queue.append(Instruction(InstructionId.MOVETO, dest_latlon))
             self.instr_queue.append(Instruction(InstructionId.LAND, dest_latlon))
             path.append(dest_latlon)
@@ -647,6 +648,7 @@ class DroneNode(Node):
                 path.append(pos)
 
             # Add instructions
+            self.instr_queue.append(Instruction(InstructionId.STOP, self.cur_latlon))  # Interrupt previous instruction
             self.instr_queue.append(Instruction(InstructionId.MOVETO, dest_latlon))
             self.instr_queue.append(Instruction(InstructionId.SEARCH, dest_latlon))
         elif cmd_id == CommandId.MOVE_TO:
@@ -656,10 +658,12 @@ class DroneNode(Node):
             dest_latlon = LatLon(dest_coords[0], dest_coords[1])
 
             # Add instructions
+            self.instr_queue.append(Instruction(InstructionId.STOP, self.cur_latlon))  # Interrupt previous instruction
             self.instr_queue.append(Instruction(InstructionId.MOVETO, dest_latlon))
             path.append(dest_latlon)
         elif cmd_id == CommandId.LAND:
             self.instr_queue.clear()
+            self.instr_queue.append(Instruction(InstructionId.STOP, self.cur_latlon))  # Interrupt previous instruction
             self.instr_queue.append(Instruction(InstructionId.LAND, self.cur_latlon))
         elif cmd_id == CommandId.DISCONNECT:
             self.instr_queue.clear()
