@@ -16,7 +16,8 @@ def generate_default_env(proj_root: Path, ros_install: Path, coords: Dict[str, f
 
     # Auto source all necessary things
     contents += f"source {str(ros_install.absolute())}\n"
-    contents += "source ./install/setup.bash\n\n"
+    contents += "source ./install/setup.bash\n"
+    contents += "source ./drone_config.sh\n\n"
 
     # Get drones
     drones_str = input("Enter the IDs of the drones, separated by commas: ")

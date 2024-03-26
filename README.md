@@ -53,6 +53,9 @@ source /opt/ros/iron/setup.bash
 colcon build
 ```
 
+Inspect the `drone_config.sh` script, which contains the parameters for the drone node.
+- This will be automatically sourced by `env.sh`, so there is no need to manually source this.
+
 ---
 
 ## Usage (Physical)

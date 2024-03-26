@@ -16,7 +16,8 @@ def generate_default_env(proj_root: Path, ros_install: Path, px4_autopilot_dir: 
 
     # Auto source all necessary things
     contents += f"source {str(ros_install.absolute())}\n"
-    contents += "source ./install/setup.bash\n\n"
+    contents += "source ./install/setup.bash\n"
+    contents += "source ./drone_config.sh\n\n"
 
     # Add environment variables
     lat = coords.get("latitude", 0.0)

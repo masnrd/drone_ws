@@ -1,4 +1,5 @@
 from typing import Dict, Any, Union, List, Deque
+from os import environ
 from enum import IntEnum
 from collections import deque
 import struct
@@ -16,6 +17,7 @@ from px4_msgs.msg import TrajectorySetpoint
 from mc_interface_msgs.msg import Ready, Detected
 from mc_interface_msgs.srv import Command, Status
 from sensor_interface_msgs.srv import ScanRequest
+from sys import stderr
 
 """ CONSTANTS """
 # Intervals
@@ -24,25 +26,22 @@ HB_FC_INTERVAL = 0.1
 HB_MC_INTERVAL = 0.1
 SENSOR_CHECK_INTERVAL = 0.5 # How often to check the sensor's status
 
-## If the drone remains in IDLE_AIR mode for this number of cycles (i.e. connected, in the air), it lands.
-MAX_IDLE_CYCLES_IN_AIR = 5 * 60 * 10 # 5 minutes
-
-## If the drone remains in CONN_AIR mode for this number of cycles (i.e. cannot connect to MC and is in the air), it gives up and lands.
-MAX_CONN_MC_IN_AIR = 15 * 10  # 15 seconds
-
-# These control how many failed heartbeats is necessary to determine a loss of connection
-FC_CONNECTED_TIMEOUT = 1
-MC_CONNECTED_TIMEOUT = 3
-CONN_FC_TIMEOUT = 60  # After this timeout, drone has failed to connect to flight controller
-
-# Default constants for the drone
-DEFAULT_DRONE_ID = 69
-DEFAULT_DIST_FROM_GROUND = 7.0
-DEFAULT_RCH_THRESH = 1  # Distance in metres from a point to consider it 'reached'.
-DEFAULT_LANDED_THRESH = 0.5  # Distance in metres for dfg, for drone to be "landed".
-DEFAULT_MAX_VERTICAL_SPEED   = 0.2     # in m/s
-DEFAULT_MAX_HORIZONTAL_SPEED = 0.334   # in m/s
-
+class DroneConfig:
+    def __init__(self):
+        try:
+            self.altitude_m = float(environ.get("ALTITUDE_M", None))
+            self.thresh_reached_m = float(environ.get("THRESH_REACHED_M", None))
+            self.thresh_landed_m = float(environ.get("THRESH_LANDED_M", None))
+            self.speed_horizontal_mps = float(environ.get("SPEED_HORIZONTAL_MPS", None))
+            self.speed_vertical_mps = float(environ.get("SPEED_VERTICAL_MPS", None))
+            self.idle_air_timeout_s = int(environ.get("IDLE_AIR_TIMEOUT_S", None))
+            self.conn_air_timeout_s = int(environ.get("CONN_AIR_TIMEOUT_S", None))
+            self.fc_loss_timeout_s = int(environ.get("FC_LOSS_TIMEOUT_S", None))
+            self.fc_initial_timeout_s = int(environ.get("FC_INITIAL_TIMEOUT_S", None))
+            self.mc_loss_timeout_s = int(environ.get("MC_LOSS_TIMEOUT_S", None))
+        except Exception:
+            print("Error: Invalid config. Please run `source drone_config.sh`.", file=stderr)
+            exit(1)
 
 class DroneState(IntEnum):
     """ Current State of the drone """
@@ -104,8 +103,9 @@ Drone ROS2 Node
 """
 
 class DroneNode(Node):
-    def __init__(self):
+    def __init__(self, droneconfig: DroneConfig):
         super().__init__("drone")
+        self.droneconfig = droneconfig
 
         # Obtain drone ID
         ## For ROS2 Iron
@@ -113,24 +113,26 @@ class DroneNode(Node):
             self.declare_parameter("droneId", rclpy.Parameter.Type.INTEGER)
             drone_id = self.get_parameter("droneId").get_parameter_value().integer_value
         except ParameterUninitializedException:
-            drone_id = None
+            print("Please run with the droneId parameter.")
+            exit(1)
 
-        # ## For ROS2 Foxy
+        ## For ROS2 Foxy
         # self.declare_parameter("droneId", -1)
         # drone_id = self.get_parameter("droneId").get_parameter_value().integer_value
         # if drone_id == -1:
-        #     drone_id = None
+        #     print("Please run with the droneId parameter.")
+        #     exit(1)
 
         # Initialise drone node
         self.drone_state = DroneState.INIT
-        self.drone_id = drone_id if drone_id is not None else DEFAULT_DRONE_ID
+        self.drone_id = drone_id
         self.pathfinder = None
         self.cur_latlon: Union[LatLon, None] = None
         self.tgt_latlon: Union[LatLon, None] = None
         self.ref_latlon: Union[LatLon, None] = None
         self.home_latlon: Union[LatLon, None] = None
         self.cur_alt, self.tgt_alt = 0.0, 0.0
-        self.tgt_dfg = DEFAULT_DIST_FROM_GROUND  # Target distance from ground
+        self.tgt_dfg = self.droneconfig.altitude_m
         self.qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -325,7 +327,7 @@ class DroneNode(Node):
             self.mc_dropped_count = 0
             self.mc_connected = True
         
-        if self.mc_dropped_count >= MC_CONNECTED_TIMEOUT: # LOST connection to MC
+        if (self.mc_dropped_count * HB_MC_INTERVAL) >= self.droneconfig.mc_loss_timeout_s: # LOST connection to MC
             self.mc_connected = False
             self.mc_dropped_count = 0
             return
@@ -350,8 +352,8 @@ class DroneNode(Node):
         
         if not self.fc_connected:
             self.fc_connect_attempts += 1
-            if self.fc_connect_attempts >= (CONN_FC_TIMEOUT // CYCLE_INTERVAL):
-                self.error(f"Could not obtain reference point or system ID after {CONN_FC_TIMEOUT} seconds.")
+            if (self.fc_connect_attempts * CYCLE_INTERVAL) >= self.droneconfig.fc_initial_timeout_s:
+                self.error(f"Could not obtain reference point or system ID after {self.droneconfig.fc_initial_timeout_s} seconds.")
 
     def drone_run_idle_grd(self):
         if not (self.fc_connected and self.mc_connected):
@@ -380,14 +382,14 @@ class DroneNode(Node):
             return
         self._fc_start_arming = False
         self.tgt_latlon = self.cur_latlon
-        self.tgt_alt = DEFAULT_DIST_FROM_GROUND
+        self.tgt_alt = self.droneconfig.altitude_m
         
         if self.cur_alt > self.tgt_alt - 1:
             self.change_state(DroneState.IDLE_AIR, "Drone is armed and in the air.")
     
     def drone_run_landing(self):
         self.fc_publish_land()
-        if (self.cur_alt <= DEFAULT_LANDED_THRESH) or (not self.fc_armed) or (not self.fc_connected):
+        if (self.cur_alt <= self.droneconfig.thresh_landed_m) or (not self.fc_armed) or (not self.fc_connected):
             self.change_state(DroneState.IDLE_GRD, "Drone has landed.")
 
     def drone_run_conn_air(self):
@@ -399,8 +401,8 @@ class DroneNode(Node):
             return
         
         self._conn_air_cycles += 1
-        if self._conn_air_cycles >= MAX_CONN_MC_IN_AIR:
-            self.change_state(DroneState.CONN_GRD, f"Landing, after failure to connect to MC after {self._conn_air_cycles * CYCLE_INTERVAL}")
+        if (self._conn_air_cycles * CYCLE_INTERVAL) >= self.droneconfig.conn_air_timeout_s:
+            self.change_state(DroneState.CONN_GRD, f"Landing, after failure to connect to MC after {self.droneconfig.conn_air_timeout_s} seconds.")
 
     def drone_run_idle_air(self):
         if not (self.fc_connected and self.fc_armed):
@@ -412,7 +414,7 @@ class DroneNode(Node):
         
         if len(self.instr_queue) == 0:
             self.idle_cycles += 1
-            if self.idle_cycles >= MAX_IDLE_CYCLES_IN_AIR:
+            if (self.idle_cycles * CYCLE_INTERVAL) >= self.droneconfig.idle_air_timeout_s:
                 self.change_state(DroneState.LANDING, f"Landing due to inactivity at {self.cur_latlon}")
             return
         
@@ -450,7 +452,7 @@ class DroneNode(Node):
                 self.change_state(DroneState.IDLE_AIR)
 
         # Check if we've reached
-        reached = (self.tgt_latlon is None) or (self.tgt_latlon.distFromPoint(self.cur_latlon) <= DEFAULT_RCH_THRESH)
+        reached = (self.tgt_latlon is None) or (self.tgt_latlon.distFromPoint(self.cur_latlon) <= self.droneconfig.thresh_reached_m)
         if reached:
             # Change state to the next state. Any necessary arguments should have been processed when the command was first received.
             self.change_state(DroneState.IDLE_AIR, f"MOVETO {self.tgt_latlon} done.")
@@ -474,7 +476,7 @@ class DroneNode(Node):
                 self.change_state(DroneState.IDLE_AIR)
         
         # Check if we've reached
-        reached = (self.tgt_latlon is None) or (self.tgt_latlon.distFromPoint(self.cur_latlon) <= DEFAULT_RCH_THRESH)
+        reached = (self.tgt_latlon is None) or (self.tgt_latlon.distFromPoint(self.cur_latlon) <= self.droneconfig.thresh_reached_m)
         if reached:
             # Get next waypoint
             if self.pathfinder is None:
@@ -578,8 +580,8 @@ class DroneNode(Node):
         vel_vec = np.array([0.0, 0.0])
         if norm != 0.0:
             vel_vec = tgt_vec / norm
-        vel_vec *= DEFAULT_MAX_HORIZONTAL_SPEED
-        tgt_z *= DEFAULT_MAX_VERTICAL_SPEED
+        vel_vec *= self.droneconfig.speed_horizontal_mps
+        tgt_z *= self.droneconfig.speed_vertical_mps
         
         msg = TrajectorySetpoint()
         msg.position = [float('nan'), float('nan'), float('nan')]
@@ -710,8 +712,10 @@ class DroneNode(Node):
         self.change_state(DroneState.EXIT, f"Exiting due to error {msg}")
 
 def main(args=None):
+    droneconfig = DroneConfig()
+
     rclpy.init(args=args)
-    drone_node = DroneNode()
+    drone_node = DroneNode(droneconfig)
 
     rclpy.spin(drone_node)
 
