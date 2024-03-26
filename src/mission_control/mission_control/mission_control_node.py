@@ -207,7 +207,7 @@ def main(args=None):
 
     # Setup Drones
     drone_states: Dict[DroneId, DroneState] = {}
-    commands = Queue[Tuple[DroneId, DroneCommand]] = Queue()
+    commands: Queue[Tuple[DroneId, DroneCommand]] = Queue()
 
     if is_simulated:
         print("Setting up in SITL mode.")
