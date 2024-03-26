@@ -95,7 +95,7 @@ export default function SidebarComponent({
               FakeDetection.shouldDisplayEntity(entity, clusters)
             )
             .map((entity, index) => (
-              <ListItem>
+              <ListItem key={index}>
                 <Box
                   sx={{
                     marginBottom: 2,

@@ -7,6 +7,7 @@ import {
   Popup,
   Circle,
   Polyline,
+  // LayersControl, FeatureGroup, GeoJSON,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 // import {polygonToCells, cellToBoundary} from "h3-js";
@@ -21,7 +22,7 @@ export default function Map({
   detectedEntities,
   setMap,
 }) {
-  const start_position = [1.3410943577604117, 103.96540423849946];//[1.3399775009363866, 103.96258672159254];
+  const start_position = [1.3399775009363866, 103.96258672159254];
 
   const addHotspot = (latlng) => {
     const url = "http://127.0.0.1:5000/hotspot/add";
@@ -64,9 +65,9 @@ export default function Map({
                   Mode: {drone.mode}
                 </Popup>
               </Marker>
-              {drone.path && (
+              {drone.simulated_path && (
                 <Polyline
-                  positions={Object.values(drone.path).map(
+                  positions={Object.values(drone.simulated_path).map(
                     (point) => [point.lat, point.lon]
                   )}
                   color="black"
@@ -94,16 +95,16 @@ export default function Map({
             <Circle
               key={`circle-${index}`}
               center={{ lat: cluster[0][0], lng: cluster[0][1] }}
-              radius={60}
-              color="#92a8d1"
-              fillColor="#92a8d1"
-              fillOpacity={0.5}
+              radius={30}
+              color="#ffd214"
+              fillColor="#ffd214"
+              fillOpacity={0.4}
               weight={0}
             />
           </div>
         ))}
         {detectedEntities
-          .filter((entity) => 
+          .filter((entity) =>
             FakeDetection.shouldDisplayEntity(entity, clusters, 0.3)
           )
           .map((entity, index) => (

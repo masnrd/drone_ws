@@ -5,8 +5,6 @@ import WhatshotIcon from "@mui/icons-material/Whatshot";
 import AccessibilityIcon from "@mui/icons-material/Accessibility";
 import LocationSearchingIcon from "@mui/icons-material/LocationSearching";
 import DroneIconUrl from "../assets/drone2.svg";
-import { Avatar, rgbToHex } from "@mui/material";
-import { green } from "@mui/material/colors";
 
 const createDroneIcon = (number) => {
   const iconHtml = `
@@ -58,7 +56,7 @@ const createDetectionIcon = () => {
   const iconHtml = ReactDOMServer.renderToString(
     <div
       style={{
-        backgroundColor: "grey",
+        backgroundColor: "maroon",
         borderRadius: "50%",
         display: "flex",
         justifyContent: "center",
@@ -81,7 +79,7 @@ const createClusterIcon = (number) => {
   const iconSvgHtml = ReactDOMServer.renderToString(
     <div
       style={{
-        backgroundColor: "#92a8d1",
+        backgroundColor: "#ffd214",
         borderRadius: "50%",
         display: "flex",
         justifyContent: "center",
