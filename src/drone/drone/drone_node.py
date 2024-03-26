@@ -4,13 +4,15 @@ from collections import deque
 import struct
 from math import isnan
 import rclpy
+import numpy as np
 from rclpy.exceptions import ParameterUninitializedException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.task import Future
 from .maplib import LatLon
 from .pathfinder import PathfinderState
-from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleCommandAck, TrajectorySetpoint, VehicleControlMode, VehicleStatus, BatteryStatus
+from px4_msgs.msg import OffboardControlMode, VehicleCommand, VehicleGlobalPosition, VehicleLocalPosition, VehicleStatus, BatteryStatus
+from px4_msgs.msg import TrajectorySetpoint
 from mc_interface_msgs.msg import Ready, Detected
 from mc_interface_msgs.srv import Command, Status
 from sensor_interface_msgs.srv import ScanRequest
@@ -38,6 +40,8 @@ DEFAULT_DRONE_ID = 69
 DEFAULT_DIST_FROM_GROUND = 7.0
 DEFAULT_RCH_THRESH = 1  # Distance in metres from a point to consider it 'reached'.
 DEFAULT_LANDED_THRESH = 0.5  # Distance in metres for dfg, for drone to be "landed".
+DEFAULT_MAX_VERTICAL_SPEED   = 0.2     # in m/s
+DEFAULT_MAX_HORIZONTAL_SPEED = 0.334   # in m/s
 
 
 class DroneState(IntEnum):
@@ -563,9 +567,24 @@ class DroneNode(Node):
         if self.tgt_latlon is None:
             self.log("WARNING: tgt_latlon is None")
             return
-        tgt_xy = self.tgt_latlon.toXY(self.ref_latlon)  # TrajSP takes only XY relative to the FC's reference point.
+        if self.cur_latlon is None:
+            self.log("WARNING: cur_latlon is None")
+            return
+        
+        tgt_vec_xy = self.tgt_latlon.toXY(self.cur_latlon)
+        tgt_vec = np.array([tgt_vec_xy.x, tgt_vec_xy.y])
+        tgt_z =  -(self.tgt_alt - self.cur_alt)
+        norm = np.linalg.norm(tgt_vec)
+        vel_vec = np.array([0.0, 0.0])
+        if norm != 0.0:
+            vel_vec = tgt_vec / norm
+        vel_vec *= DEFAULT_MAX_HORIZONTAL_SPEED
+        tgt_z *= DEFAULT_MAX_VERTICAL_SPEED
+        
         msg = TrajectorySetpoint()
-        msg.position = [tgt_xy.x, tgt_xy.y, -self.tgt_alt]
+        msg.position = [float('nan'), float('nan'), float('nan')]
+        msg.velocity = [vel_vec[0], vel_vec[1], tgt_z]
+        msg.acceleration = [0.0, 0.0, 0.0]
         msg.timestamp = self.clock_microseconds()
         self.pub_trajsp.publish(msg)
 
@@ -632,6 +651,7 @@ class DroneNode(Node):
             dest_latlon = LatLon(dest_coords[0], dest_coords[1])
 
             # Add instructions
+            self.instr_queue.clear()
             self.instr_queue.append(Instruction(InstructionId.STOP, self.cur_latlon))  # Interrupt previous instruction
             self.instr_queue.append(Instruction(InstructionId.MOVETO, dest_latlon))
             self.instr_queue.append(Instruction(InstructionId.LAND, dest_latlon))
@@ -648,6 +668,7 @@ class DroneNode(Node):
                 path.append(pos)
 
             # Add instructions
+            self.instr_queue.clear()
             self.instr_queue.append(Instruction(InstructionId.STOP, self.cur_latlon))  # Interrupt previous instruction
             self.instr_queue.append(Instruction(InstructionId.MOVETO, dest_latlon))
             self.instr_queue.append(Instruction(InstructionId.SEARCH, dest_latlon))
@@ -658,6 +679,7 @@ class DroneNode(Node):
             dest_latlon = LatLon(dest_coords[0], dest_coords[1])
 
             # Add instructions
+            self.instr_queue.clear()
             self.instr_queue.append(Instruction(InstructionId.STOP, self.cur_latlon))  # Interrupt previous instruction
             self.instr_queue.append(Instruction(InstructionId.MOVETO, dest_latlon))
             path.append(dest_latlon)
