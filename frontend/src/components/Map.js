@@ -37,12 +37,12 @@ export default function Map({
         center={start_position}
         zoom={18}
         minZoom={16}
-        maxZoom={30}
+        maxZoom={19}
         scrollWheelZoom={true}
         ref={setMap}>
         <TileLayer
           zoom={18}
-          maxZoom={30}
+          maxZoom={19}
           attribution="&copy; OpenStreetMap contributors"
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           // url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -65,9 +65,9 @@ export default function Map({
                   Mode: {drone.mode}
                 </Popup>
               </Marker>
-              {drone.simulated_path && (
+              {drone.path && (
                 <Polyline
-                  positions={Object.values(drone.simulated_path).map(
+                  positions={Object.values(drone.path).map(
                     (point) => [point.lat, point.lon]
                   )}
                   color="black"
