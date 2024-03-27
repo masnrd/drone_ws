@@ -13,22 +13,8 @@ build_drone: $(DRONE_DEP)
 build_sensor: $(SENSOR_DEP)
 	colcon build --packages-select sensor_node
 
-# Builds mission control node for ROS 2
-build_mc: $(MC_DEP)
-	colcon build --packages-select mission_control
-
 # Runs Python tests for the drone
 test_drone: $(DRONE_DEP)
 	colcon test-result --delete-yes
 	colcon test --packages-select drone
 	colcon test-result --all --verbose
-
-# Runs Python tests for the drone
-test_mc: $(MC_DEP)
-	colcon test-result --delete-yes
-	colcon test --packages-select mission_control
-	colcon test-result --all --verbose
-
-# Inform user if they run this invalid command
-px4_sitl:
-	@echo "\033[91mPlease run this command in the PX4-Autopilot directory instead.\033[0m"
