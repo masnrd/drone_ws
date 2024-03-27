@@ -19,7 +19,7 @@ Follow the instructions provided [here](https://docs.px4.io/main/en/ros/ros2_com
 
 Clone this repository along with all submodules:
 ```
-git clone --recursive https://github.com/masnrd/drone_ws.git
+git clone --recursive https://github.com/masnrd/drone_ws.git -b release/mc-v0.8.speedy-gonzales --single-branch
 ```
 
 Install all Python3 dependencies:
@@ -49,7 +49,7 @@ python3 ./tools/patch_px4.py
 Now, build the ROS2 project.
 ```bash
 # In the project root (i.e. drone_ws)
-source /opt/ros/iron/setup.bash
+source /opt/ros/foxy/setup.bash
 colcon build
 ```
 
@@ -86,7 +86,7 @@ Run the Mission Control:
     npm start
     ```
 
-The drones should be using the corresponding `stable/drone-v*` branch, and should automatically connect to Mission Control.
+The drones should be using the corresponding `release/drone-v0.8-speedy-gonzales` branch, and should automatically connect to Mission Control.
 
 ---
 
